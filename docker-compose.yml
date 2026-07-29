@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: la-comfianza-postgres
+
+    environment:
+      POSTGRES_DB: payroll
+      POSTGRES_USER: payroll
+      POSTGRES_PASSWORD: payroll_dev_password
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - payroll_postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payroll -d payroll"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+    restart: unless-stopped
+
+volumes:
+  payroll_postgres_data:
