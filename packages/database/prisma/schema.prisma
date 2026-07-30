@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -10,4 +5,1112 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserStatus {
+  PENDING_ASSIGNMENT
+  ACTIVE
+  DISABLED
+}
+
+enum RoleCode {
+  PAYROLL_MANAGER
+  COMPANY_MANAGER
+  EMPLOYEE
+}
+
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ConfigStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+enum CutoffFrequency {
+  WEEKLY
+  SEMI_MONTHLY
+  MONTHLY
+  CUSTOM
+}
+
+enum HolidayType {
+  REGULAR
+  SPECIAL_NON_WORKING
+  SPECIAL_WORKING
+  LOCAL
+  OTHER
+}
+
+enum EmployeePayrollStatus {
+  ACTIVE
+  ACTIVE_HOLD
+  RESIGNED
+}
+
+enum PayBasis {
+  DAILY
+  MONTHLY
+}
+
+enum PayoutMethod {
+  CASH
+  ATM
+}
+
+enum RecurringPayrollItemKind {
+  ALLOWANCE
+  FIXED_DEDUCTION
+}
+
+enum GovernmentIdentifierType {
+  SSS
+  PHILHEALTH
+  PAGIBIG
+  TIN
+  OTHER
+}
+
+enum LeaveUnit {
+  DAY
+  HOUR
+}
+
+enum LeaveTransactionType {
+  INITIAL_ALLOCATION
+  ALLOCATION
+  USAGE
+  MANUAL_ADJUSTMENT
+  CARRY_OVER
+  EXPIRATION
+  RESET
+  REVERSAL
+}
+
+enum DtrStatus {
+  DRAFT
+  FOR_REVIEW
+  VALIDATED
+  LAST_PAY_REVIEW
+}
+
+enum OvertimeType {
+  REGULAR
+  REST_DAY
+  SPECIAL_HOLIDAY
+  REGULAR_HOLIDAY
+  REST_DAY_SPECIAL_HOLIDAY
+  REST_DAY_REGULAR_HOLIDAY
+}
+
+enum PayrollCutoffStatus {
+  OPEN
+  LOCKED
+  REOPENED
+}
+
+enum PayrollAdjustmentType {
+  EARNING
+  DEDUCTION
+}
+
+enum PayrollRunStatus {
+  CURRENT_LOCKED
+  REOPENED_PENDING_REGENERATION
+  SUPERSEDED
+}
+
+enum PayrollLineCategory {
+  EARNING
+  DEDUCTION
+  CONTRIBUTION
+  TAX
+  ADJUSTMENT
+  INFORMATION
+}
+
+enum AuditOutcome {
+  SUCCESS
+}
+
+// ============================================================
+// IDENTITY / AUTHORIZATION
+// ============================================================
+
+model User {
+  id              String     @id @default(uuid()) @db.Uuid
+  cognitoSubject  String?    @unique
+  username        String     @unique
+  email           String     @unique
+  firstName       String
+  lastName        String
+  jobTitle        String?
+  mobile          String?
+  status          UserStatus @default(PENDING_ASSIGNMENT)
+  emailVerifiedAt DateTime?  @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  employee Employee? @relation("EmployeeUser")
+
+  roles           UserRole[]
+  companyAccesses UserCompanyAccess[]
+
+  employeeStatusChanges EmployeeStatusHistory[] @relation("EmployeeStatusChangedBy")
+
+  leaveTransactions LeaveTransaction[] @relation("LeaveTransactionCreatedBy")
+
+  payrollAdjustments PayrollAdjustment[] @relation("PayrollAdjustmentCreatedBy")
+
+  payrollRuns PayrollRun[] @relation("PayrollRunGeneratedBy")
+
+  payslips Payslip[] @relation("PayslipGeneratedBy")
+
+  auditLogs AuditLog[] @relation("AuditActor")
+
+  @@index([status])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        RoleCode @unique
+  name        String
+  description String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  users UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  roleId String @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model UserCompanyAccess {
+  id        String @id @default(uuid()) @db.Uuid
+  userId    String @db.Uuid
+  companyId String @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, companyId])
+  @@index([companyId])
+  @@map("user_company_access")
+}
+
+// ============================================================
+// COMPANY
+// ============================================================
+
+model Company {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique
+  name String
+
+  addressLine1 String?
+  addressLine2 String?
+  barangay     String?
+  city         String?
+  province     String?
+  postalCode   String?
+  country      String  @default("Philippines")
+
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+
+  status CompanyStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  userAccesses UserCompanyAccess[]
+
+  payrollSetup CompanyPayrollSetup?
+
+  cutoffTemplates CutoffTemplate[]
+  holidays        Holiday[]
+
+  departments Department[]
+  positions   Position[]
+
+  employmentRecords EmploymentRecord[]
+
+  leaveTypes LeaveType[]
+
+  payrollCutoffs     PayrollCutoff[]
+  dtrs               Dtr[]
+  payrollAdjustments PayrollAdjustment[]
+  payrollRuns        PayrollRun[]
+
+  auditLogs AuditLog[]
+
+  @@index([name])
+  @@index([status])
+  @@map("companies")
+}
+
+// ============================================================
+// GOLDEN PAYROLL TEMPLATE
+// ============================================================
+
+model PayrollTemplate {
+  id          String  @id @default(uuid()) @db.Uuid
+  code        String  @unique
+  name        String
+  description String?
+
+  status ConfigStatus @default(DRAFT)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  versions PayrollTemplateVersion[]
+
+  @@index([status])
+  @@map("payroll_templates")
+}
+
+model PayrollTemplateVersion {
+  id                String @id @default(uuid()) @db.Uuid
+  payrollTemplateId String @db.Uuid
+
+  version Int
+  name    String?
+
+  config Json @db.JsonB
+
+  status ConfigStatus @default(DRAFT)
+
+  effectiveFrom DateTime? @db.Date
+  effectiveTo   DateTime? @db.Date
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  payrollTemplate PayrollTemplate @relation(fields: [payrollTemplateId], references: [id], onDelete: Restrict)
+
+  companySetupVersions CompanyPayrollSetupVersion[]
+
+  @@unique([payrollTemplateId, version])
+  @@index([status])
+  @@map("payroll_template_versions")
+}
+
+// ============================================================
+// COMPANY PAYROLL SETUP
+// ============================================================
+
+model CompanyPayrollSetup {
+  id        String @id @default(uuid()) @db.Uuid
+  companyId String @unique @db.Uuid
+
+  name   String
+  status ConfigStatus @default(DRAFT)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  versions CompanyPayrollSetupVersion[]
+
+  @@index([status])
+  @@map("company_payroll_setups")
+}
+
+model CompanyPayrollSetupVersion {
+  id                      String  @id @default(uuid()) @db.Uuid
+  companyPayrollSetupId   String  @db.Uuid
+  sourceTemplateVersionId String? @db.Uuid
+
+  version Int
+
+  config Json @db.JsonB
+
+  status ConfigStatus @default(DRAFT)
+
+  effectiveFrom DateTime? @db.Date
+  effectiveTo   DateTime? @db.Date
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  companyPayrollSetup CompanyPayrollSetup @relation(fields: [companyPayrollSetupId], references: [id], onDelete: Restrict)
+
+  sourceTemplateVersion PayrollTemplateVersion? @relation(fields: [sourceTemplateVersionId], references: [id], onDelete: Restrict)
+
+  payrollRuns PayrollRun[]
+
+  @@unique([companyPayrollSetupId, version])
+  @@index([sourceTemplateVersionId])
+  @@index([status])
+  @@map("company_payroll_setup_versions")
+}
+
+// ============================================================
+// CUTOFF / HOLIDAY CONFIGURATION
+// ============================================================
+
+model CutoffTemplate {
+  id        String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+
+  code String
+  name String
+
+  frequency CutoffFrequency
+
+  // Supports:
+  // semi-monthly, weekly, monthly, or custom configuration.
+  configuration Json @db.JsonB
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  payrollCutoffs PayrollCutoff[]
+
+  @@unique([companyId, code])
+  @@index([companyId, active])
+  @@map("cutoff_templates")
+}
+
+model Holiday {
+  id        String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+
+  date DateTime @db.Date
+
+  name String
+  type HolidayType
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  dtrEntries DtrEntry[]
+
+  @@unique([companyId, date])
+  @@index([companyId, date])
+  @@map("holidays")
+}
+
+// ============================================================
+// DEPARTMENT / POSITION
+// ============================================================
+
+model Department {
+  id        String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+
+  code String
+  name String
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  employmentRecords EmploymentRecord[]
+
+  @@unique([companyId, code])
+  @@index([companyId, active])
+  @@map("departments")
+}
+
+model Position {
+  id        String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+
+  code String
+  name String
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  employmentRecords EmploymentRecord[]
+
+  @@unique([companyId, code])
+  @@index([companyId, active])
+  @@map("positions")
+}
+
+// ============================================================
+// EMPLOYEE
+// ============================================================
+
+model Employee {
+  id             String @id @default(uuid()) @db.Uuid
+  employeeNumber String @unique
+
+  userId String? @unique @db.Uuid
+
+  firstName  String
+  middleName String?
+  lastName   String
+  suffix     String?
+
+  email  String?
+  mobile String?
+
+  addressLine1 String?
+  addressLine2 String?
+  barangay     String?
+  city         String?
+  province     String?
+  postalCode   String?
+  country      String  @default("Philippines")
+
+  currentStatus EmployeePayrollStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  user User? @relation("EmployeeUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  statusHistory EmployeeStatusHistory[]
+
+  employmentRecords EmploymentRecord[]
+
+  governmentIdentifiers GovernmentIdentifier[]
+
+  leaveAccounts EmployeeLeaveAccount[]
+
+  dtrs Dtr[]
+
+  payrollAdjustments PayrollAdjustment[]
+
+  payrollResults PayrollRunEmployee[]
+
+  @@index([lastName, firstName])
+  @@index([currentStatus])
+  @@map("employees")
+}
+
+model EmployeeStatusHistory {
+  id         String @id @default(uuid()) @db.Uuid
+  employeeId String @db.Uuid
+
+  previousStatus EmployeePayrollStatus?
+  newStatus      EmployeePayrollStatus
+
+  effectiveDate DateTime @db.Date
+
+  changedByUserId String   @db.Uuid
+  changedAt       DateTime @default(now()) @db.Timestamptz(3)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  changedBy User @relation("EmployeeStatusChangedBy", fields: [changedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, effectiveDate])
+  @@index([newStatus])
+  @@map("employee_status_history")
+}
+
+model EmploymentRecord {
+  id         String @id @default(uuid()) @db.Uuid
+  employeeId String @db.Uuid
+  companyId  String @db.Uuid
+
+  departmentId String? @db.Uuid
+  positionId   String? @db.Uuid
+
+  companyEmployeeNumber String?
+
+  startDate DateTime  @db.Date
+  endDate   DateTime? @db.Date
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  position Position? @relation(fields: [positionId], references: [id], onDelete: Restrict)
+
+  compensationRecords CompensationRecord[]
+
+  payrollProfile EmployeePayrollProfile?
+
+  recurringPayrollItems RecurringPayrollItem[]
+
+  dtrs Dtr[]
+
+  payrollResults PayrollRunEmployee[]
+
+  @@unique([companyId, companyEmployeeNumber])
+  @@index([employeeId, startDate])
+  @@index([companyId, startDate])
+  @@index([departmentId])
+  @@index([positionId])
+  @@map("employment_records")
+}
+
+model CompensationRecord {
+  id                 String @id @default(uuid()) @db.Uuid
+  employmentRecordId String @db.Uuid
+
+  payBasis PayBasis
+
+  rate Decimal @db.Decimal(18, 4)
+
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  employmentRecord EmploymentRecord @relation(fields: [employmentRecordId], references: [id], onDelete: Restrict)
+
+  @@index([employmentRecordId, effectiveFrom])
+  @@map("compensation_records")
+}
+
+model EmployeePayrollProfile {
+  id                 String @id @default(uuid()) @db.Uuid
+  employmentRecordId String @unique @db.Uuid
+
+  payoutMethod PayoutMethod
+
+  bankName               String?
+  accountNumberEncrypted String?
+  accountNumberLast4     String?
+
+  contributionConfig Json? @db.JsonB
+  taxConfig          Json? @db.JsonB
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  employmentRecord EmploymentRecord @relation(fields: [employmentRecordId], references: [id], onDelete: Restrict)
+
+  @@index([payoutMethod])
+  @@map("employee_payroll_profiles")
+}
+
+model RecurringPayrollItem {
+  id                 String @id @default(uuid()) @db.Uuid
+  employmentRecordId String @db.Uuid
+
+  kind RecurringPayrollItemKind
+
+  code        String
+  description String
+
+  amount Decimal @db.Decimal(18, 2)
+
+  taxable Boolean @default(false)
+  active  Boolean @default(true)
+
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  employmentRecord EmploymentRecord @relation(fields: [employmentRecordId], references: [id], onDelete: Restrict)
+
+  @@index([employmentRecordId, active])
+  @@index([kind])
+  @@map("recurring_payroll_items")
+}
+
+model GovernmentIdentifier {
+  id         String @id @default(uuid()) @db.Uuid
+  employeeId String @db.Uuid
+
+  type GovernmentIdentifierType
+
+  valueEncrypted String
+  valueLast4     String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@unique([employeeId, type])
+  @@index([type])
+  @@map("government_identifiers")
+}
+
+// ============================================================
+// LEAVE
+// ============================================================
+
+model LeaveType {
+  id        String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+
+  code String
+  name String
+
+  unit LeaveUnit
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  employeeAccounts EmployeeLeaveAccount[]
+  dtrEntries       DtrEntry[]
+
+  @@unique([companyId, code])
+  @@index([companyId, active])
+  @@map("leave_types")
+}
+
+model EmployeeLeaveAccount {
+  id          String @id @default(uuid()) @db.Uuid
+  employeeId  String @db.Uuid
+  leaveTypeId String @db.Uuid
+
+  currentBalance Decimal @default(0) @db.Decimal(12, 4)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+
+  transactions LeaveTransaction[]
+
+  @@unique([employeeId, leaveTypeId])
+  @@index([leaveTypeId])
+  @@map("employee_leave_accounts")
+}
+
+model LeaveTransaction {
+  id             String @id @default(uuid()) @db.Uuid
+  leaveAccountId String @db.Uuid
+
+  type LeaveTransactionType
+
+  // Positive values increase balance.
+  // Negative values decrease balance.
+  quantity Decimal @db.Decimal(12, 4)
+
+  effectiveDate DateTime @db.Date
+
+  referenceType String?
+  referenceId   String?
+  notes         String?
+
+  createdByUserId String   @db.Uuid
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+
+  leaveAccount EmployeeLeaveAccount @relation(fields: [leaveAccountId], references: [id], onDelete: Restrict)
+
+  createdBy User @relation("LeaveTransactionCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([leaveAccountId, effectiveDate])
+  @@index([type])
+  @@map("leave_transactions")
+}
+
+// ============================================================
+// PAYROLL CUTOFF
+// ============================================================
+
+model PayrollCutoff {
+  id               String  @id @default(uuid()) @db.Uuid
+  companyId        String  @db.Uuid
+  cutoffTemplateId String? @db.Uuid
+
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  payDate   DateTime @db.Date
+
+  status PayrollCutoffStatus @default(OPEN)
+
+  lockedAt DateTime? @db.Timestamptz(3)
+
+  reopenedAt       DateTime? @db.Timestamptz(3)
+  lastReopenReason String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  cutoffTemplate CutoffTemplate? @relation(fields: [cutoffTemplateId], references: [id], onDelete: Restrict)
+
+  dtrs Dtr[]
+
+  adjustments PayrollAdjustment[]
+
+  payrollRuns PayrollRun[]
+
+  @@unique([companyId, startDate, endDate])
+  @@index([companyId, status])
+  @@index([payDate])
+  @@map("payroll_cutoffs")
+}
+
+// ============================================================
+// ATTENDANCE / DTR
+// ============================================================
+
+model Dtr {
+  id                 String @id @default(uuid()) @db.Uuid
+  companyId          String @db.Uuid
+  employeeId         String @db.Uuid
+  employmentRecordId String @db.Uuid
+  payrollCutoffId    String @db.Uuid
+
+  status DtrStatus @default(DRAFT)
+
+  validatedAt DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  employmentRecord EmploymentRecord @relation(fields: [employmentRecordId], references: [id], onDelete: Restrict)
+
+  payrollCutoff PayrollCutoff @relation(fields: [payrollCutoffId], references: [id], onDelete: Restrict)
+
+  entries DtrEntry[]
+
+  @@unique([employeeId, payrollCutoffId])
+  @@index([companyId, payrollCutoffId])
+  @@index([status])
+  @@map("dtrs")
+}
+
+model DtrEntry {
+  id    String @id @default(uuid()) @db.Uuid
+  dtrId String @db.Uuid
+
+  workDate DateTime @db.Date
+
+  regularMinutes           Int @default(0)
+  lateMinutes              Int @default(0)
+  undertimeMinutes         Int @default(0)
+  absenceMinutes           Int @default(0)
+  leaveMinutes             Int @default(0)
+  nightDifferentialMinutes Int @default(0)
+
+  restDay Boolean @default(false)
+
+  leaveTypeId String? @db.Uuid
+  holidayId   String? @db.Uuid
+
+  notes String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  dtr Dtr @relation(fields: [dtrId], references: [id], onDelete: Restrict)
+
+  leaveType LeaveType? @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+
+  holiday Holiday? @relation(fields: [holidayId], references: [id], onDelete: Restrict)
+
+  overtimeEntries OvertimeEntry[]
+
+  @@unique([dtrId, workDate])
+  @@index([workDate])
+  @@index([leaveTypeId])
+  @@index([holidayId])
+  @@map("dtr_entries")
+}
+
+model OvertimeEntry {
+  id         String @id @default(uuid()) @db.Uuid
+  dtrEntryId String @db.Uuid
+
+  type OvertimeType
+
+  minutes Int
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  dtrEntry DtrEntry @relation(fields: [dtrEntryId], references: [id], onDelete: Restrict)
+
+  @@index([dtrEntryId])
+  @@index([type])
+  @@map("overtime_entries")
+}
+
+// ============================================================
+// PAYROLL ADJUSTMENTS
+// ============================================================
+
+model PayrollAdjustment {
+  id              String @id @default(uuid()) @db.Uuid
+  companyId       String @db.Uuid
+  payrollCutoffId String @db.Uuid
+  employeeId      String @db.Uuid
+
+  type PayrollAdjustmentType
+
+  code        String
+  description String
+
+  amount Decimal @db.Decimal(18, 2)
+
+  reason String
+
+  createdByUserId String   @db.Uuid
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  payrollCutoff PayrollCutoff @relation(fields: [payrollCutoffId], references: [id], onDelete: Restrict)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  createdBy User @relation("PayrollAdjustmentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, payrollCutoffId])
+  @@index([employeeId])
+  @@map("payroll_adjustments")
+}
+
+// ============================================================
+// PAYROLL RUN
+// ============================================================
+
+model PayrollRun {
+  id                           String @id @default(uuid()) @db.Uuid
+  companyId                    String @db.Uuid
+  payrollCutoffId              String @db.Uuid
+  companyPayrollSetupVersionId String @db.Uuid
+
+  version Int
+
+  status PayrollRunStatus
+
+  generatedByUserId String   @db.Uuid
+  generatedAt       DateTime @default(now()) @db.Timestamptz(3)
+
+  // Frozen configuration used for this exact payroll run.
+  configSnapshot Json @db.JsonB
+
+  totalGross         Decimal @default(0) @db.Decimal(18, 2)
+  totalNet           Decimal @default(0) @db.Decimal(18, 2)
+  clientPayableGross Decimal @default(0) @db.Decimal(18, 2)
+  cashPayoutTotal    Decimal @default(0) @db.Decimal(18, 2)
+  atmPayoutTotal     Decimal @default(0) @db.Decimal(18, 2)
+  activeHoldTotal    Decimal @default(0) @db.Decimal(18, 2)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  payrollCutoff PayrollCutoff @relation(fields: [payrollCutoffId], references: [id], onDelete: Restrict)
+
+  companyPayrollSetupVersion CompanyPayrollSetupVersion @relation(fields: [companyPayrollSetupVersionId], references: [id], onDelete: Restrict)
+
+  generatedBy User @relation("PayrollRunGeneratedBy", fields: [generatedByUserId], references: [id], onDelete: Restrict)
+
+  employeeResults PayrollRunEmployee[]
+
+  @@unique([payrollCutoffId, version])
+  @@index([companyId, generatedAt])
+  @@index([status])
+  @@map("payroll_runs")
+}
+
+model PayrollRunEmployee {
+  id           String @id @default(uuid()) @db.Uuid
+  payrollRunId String @db.Uuid
+  employeeId   String @db.Uuid
+
+  employmentRecordId String @db.Uuid
+
+  employeeNumberSnapshot String
+  employeeNameSnapshot   String
+
+  positionSnapshot   String?
+  departmentSnapshot String?
+
+  payrollStatusSnapshot EmployeePayrollStatus
+
+  payoutMethodSnapshot       PayoutMethod
+  payoutAccountLast4Snapshot String?
+
+  payBasisSnapshot PayBasis
+  baseRateSnapshot Decimal  @db.Decimal(18, 4)
+
+  basicPay        Decimal @default(0) @db.Decimal(18, 2)
+  allowancesTotal Decimal @default(0) @db.Decimal(18, 2)
+  premiumPayTotal Decimal @default(0) @db.Decimal(18, 2)
+  grossPay        Decimal @default(0) @db.Decimal(18, 2)
+
+  governmentContributionsTotal Decimal @default(0) @db.Decimal(18, 2)
+  taxTotal                     Decimal @default(0) @db.Decimal(18, 2)
+  otherDeductionsTotal         Decimal @default(0) @db.Decimal(18, 2)
+  totalDeductions              Decimal @default(0) @db.Decimal(18, 2)
+
+  netPay Decimal @default(0) @db.Decimal(18, 2)
+
+  cashPayout Decimal @default(0) @db.Decimal(18, 2)
+  atmPayout  Decimal @default(0) @db.Decimal(18, 2)
+
+  heldAmount         Decimal @default(0) @db.Decimal(18, 2)
+  clientPayableGross Decimal @default(0) @db.Decimal(18, 2)
+
+  taxableCompensation Decimal @default(0) @db.Decimal(18, 2)
+  withholdingTax      Decimal @default(0) @db.Decimal(18, 2)
+
+  thirteenthMonthPay Decimal @default(0) @db.Decimal(18, 2)
+  lastPayAmount      Decimal @default(0) @db.Decimal(18, 2)
+
+  isLastPay Boolean @default(false)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Restrict)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  employmentRecord EmploymentRecord @relation(fields: [employmentRecordId], references: [id], onDelete: Restrict)
+
+  lineItems PayrollLineItem[]
+  payslips  Payslip[]
+
+  @@unique([payrollRunId, employeeId])
+  @@index([employeeId])
+  @@index([payrollStatusSnapshot])
+  @@index([payoutMethodSnapshot])
+  @@map("payroll_run_employees")
+}
+
+model PayrollLineItem {
+  id                   String @id @default(uuid()) @db.Uuid
+  payrollRunEmployeeId String @db.Uuid
+
+  category PayrollLineCategory
+
+  code        String
+  description String
+
+  quantity Decimal? @db.Decimal(18, 4)
+  rate     Decimal? @db.Decimal(18, 4)
+
+  amount Decimal @db.Decimal(18, 2)
+
+  sequence Int @default(0)
+
+  metadata Json? @db.JsonB
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  payrollRunEmployee PayrollRunEmployee @relation(fields: [payrollRunEmployeeId], references: [id], onDelete: Restrict)
+
+  @@index([payrollRunEmployeeId, category])
+  @@index([code])
+  @@map("payroll_line_items")
+}
+
+// ============================================================
+// PAYSLIP
+// ============================================================
+
+model Payslip {
+  id                   String @id @default(uuid()) @db.Uuid
+  payrollRunEmployeeId String @db.Uuid
+
+  version Int @default(1)
+
+  fileKey  String
+  fileName String
+
+  generatedByUserId String   @db.Uuid
+  generatedAt       DateTime @default(now()) @db.Timestamptz(3)
+
+  emailedAt DateTime? @db.Timestamptz(3)
+
+  payrollRunEmployee PayrollRunEmployee @relation(fields: [payrollRunEmployeeId], references: [id], onDelete: Restrict)
+
+  generatedBy User @relation("PayslipGeneratedBy", fields: [generatedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([payrollRunEmployeeId, version])
+  @@index([generatedAt])
+  @@map("payslips")
+}
+
+// ============================================================
+// BUSINESS ACTIVITY LOG
+// ============================================================
+
+model AuditLog {
+  id String @id @default(uuid()) @db.Uuid
+
+  actorUserId String  @db.Uuid
+  companyId   String? @db.Uuid
+
+  action String
+  module String
+
+  entityType String
+  entityId   String?
+
+  reference String?
+
+  details String
+
+  metadata Json? @db.JsonB
+
+  outcome AuditOutcome @default(SUCCESS)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  actor User @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([companyId, createdAt])
+  @@index([module, action])
+  @@map("audit_logs")
 }
