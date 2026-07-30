@@ -22,6 +22,7 @@
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",
+     "db:seed": "pnpm --filter @payroll/database seed",
 
     "check": "pnpm generate && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm db:validate"
   }
