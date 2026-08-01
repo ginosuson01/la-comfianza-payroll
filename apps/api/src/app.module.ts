@@ -6,6 +6,10 @@ import { AppService } from './app.service';
 import { validateEnvironment } from './config/environment.validation';
 import { HealthModule } from './health/health.module';
 
+import { AuthModule } from './auth/auth.module';
+
+import { DatabaseModule } from './database/database.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -17,6 +21,8 @@ import { HealthModule } from './health/health.module';
       validate: validateEnvironment,
     }),
 
+    DatabaseModule,
+    AuthModule,
     HealthModule,
   ],
 

@@ -2,13 +2,18 @@
   "name": "@payroll/database",
   "version": "0.1.0",
   "private": true,
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "type": "module",
   "scripts": {
     "generate": "prisma generate",
     "validate": "prisma validate",
     "migrate:dev": "prisma migrate dev",
     "studio": "prisma studio",
-    "seed": "prisma db seed"
+    "seed": "prisma db seed",
+    "build": "prisma generate && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

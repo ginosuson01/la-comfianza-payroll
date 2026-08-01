@@ -22,6 +22,23 @@ function getOptionalString(
   return value;
 }
 
+function getOptionalNullableString(
+  config: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const value = config[key];
+
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw new Error(`${key} must be a string.`);
+  }
+
+  return value;
+}
+
 export function validateEnvironment(
   config: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -58,10 +75,43 @@ export function validateEnvironment(
     'http://localhost:5173',
   );
 
+  const awsRegion = getOptionalString(config, 'AWS_REGION', 'ap-southeast-1');
+
+  const cognitoUserPoolId = getOptionalNullableString(
+    config,
+    'COGNITO_USER_POOL_ID',
+  );
+
+  const cognitoClientId = getOptionalNullableString(
+    config,
+    'COGNITO_CLIENT_ID',
+  );
+
+  if (nodeEnv === 'production' && (!cognitoUserPoolId || !cognitoClientId)) {
+    throw new Error(
+      'COGNITO_USER_POOL_ID and COGNITO_CLIENT_ID are required in production.',
+    );
+  }
+
   try {
     new URL(webOrigin);
   } catch {
     throw new Error('WEB_ORIGIN must be a valid URL.');
+  }
+
+  const databaseUrl = getRequiredString(config, 'DATABASE_URL');
+
+  try {
+    const parsedDatabaseUrl = new URL(databaseUrl);
+
+    if (
+      parsedDatabaseUrl.protocol !== 'postgresql:' &&
+      parsedDatabaseUrl.protocol !== 'postgres:'
+    ) {
+      throw new Error();
+    }
+  } catch {
+    throw new Error('DATABASE_URL must be a valid PostgreSQL connection URL.');
   }
 
   return {
@@ -69,5 +119,22 @@ export function validateEnvironment(
     NODE_ENV: nodeEnv,
     API_PORT: apiPort,
     WEB_ORIGIN: webOrigin,
+    DATABASE_URL: databaseUrl,
+    AWS_REGION: awsRegion,
+    COGNITO_USER_POOL_ID: cognitoUserPoolId,
+    COGNITO_CLIENT_ID: cognitoClientId,
   };
+}
+
+function getRequiredString(
+  config: Record<string, unknown>,
+  key: string,
+): string {
+  const value = config[key];
+
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`${key} is required.`);
+  }
+
+  return value.trim();
 }

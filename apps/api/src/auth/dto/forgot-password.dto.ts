@@ -1,0 +1,12 @@
+import { Transform } from 'class-transformer';
+import { IsString, MaxLength, MinLength } from 'class-validator';
+
+export class ForgotPasswordDto {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  username!: string;
+}
