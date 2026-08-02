@@ -12,6 +12,8 @@ import { DatabaseModule } from './database/database.module';
 
 import { UsersModule } from './users/users.module';
 
+import { CompaniesModule } from './companies/companies.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -26,6 +28,7 @@ import { UsersModule } from './users/users.module';
     DatabaseModule,
     AuthModule,
     UsersModule,
+    CompaniesModule,
     HealthModule,
   ],
 

@@ -1,0 +1,11 @@
+export const COMPANY_MANAGEMENT_AUDIT_MODULE = 'COMPANY_MANAGEMENT';
+
+export const COMPANY_MANAGEMENT_ENTITY_TYPE = 'Company';
+
+export const CompanyManagementAuditAction = {
+  CREATED: 'COMPANY_CREATED',
+
+  UPDATED: 'COMPANY_UPDATED',
+
+  STATUS_CHANGED: 'COMPANY_STATUS_CHANGED',
+} as const;
