@@ -5,10 +5,15 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
+
 import { ConfigService } from '@nestjs/config';
+
 import {
   AdminCreateUserCommand,
   AdminDeleteUserCommand,
+  AdminDisableUserCommand,
+  AdminEnableUserCommand,
+  AdminUserGlobalSignOutCommand,
   CognitoIdentityProviderClient,
 } from '@aws-sdk/client-cognito-identity-provider';
 
@@ -129,6 +134,59 @@ export class CognitoAdminService {
       );
 
       throw new BadGatewayException('Unable to create authentication account.');
+    }
+  }
+
+  async enableAccount(username: string): Promise<void> {
+    const userPoolId = this.requireUserPoolId();
+
+    try {
+      await this.client.send(
+        new AdminEnableUserCommand({
+          UserPoolId: userPoolId,
+          Username: username,
+        }),
+      );
+    } catch (error: unknown) {
+      this.logger.error(
+        'Cognito account enable failed.',
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error),
+      );
+
+      throw new BadGatewayException('Unable to enable authentication account.');
+    }
+  }
+
+  async disableAccount(username: string): Promise<void> {
+    const userPoolId = this.requireUserPoolId();
+
+    try {
+      await this.client.send(
+        new AdminUserGlobalSignOutCommand({
+          UserPoolId: userPoolId,
+          Username: username,
+        }),
+      );
+
+      await this.client.send(
+        new AdminDisableUserCommand({
+          UserPoolId: userPoolId,
+          Username: username,
+        }),
+      );
+    } catch (error: unknown) {
+      this.logger.error(
+        'Cognito account disable failed.',
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error),
+      );
+
+      throw new BadGatewayException(
+        'Unable to disable authentication account.',
+      );
     }
   }
 

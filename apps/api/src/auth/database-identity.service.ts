@@ -30,9 +30,41 @@ export class DatabaseIdentityService {
       );
     }
 
+    const assignments = await this.prisma.userRole.findMany({
+      where: {
+        userId: user.id,
+      },
+
+      select: {
+        roleId: true,
+      },
+    });
+
+    const roleIds = assignments.map((assignment) => assignment.roleId);
+
+    const assignedRoles =
+      roleIds.length === 0
+        ? []
+        : await this.prisma.role.findMany({
+            where: {
+              id: {
+                in: roleIds,
+              },
+            },
+
+            select: {
+              code: true,
+            },
+          });
+
     return {
       ...identity,
-      user,
+
+      user: {
+        ...user,
+
+        roles: assignedRoles.map((role) => role.code),
+      },
     };
   }
 }

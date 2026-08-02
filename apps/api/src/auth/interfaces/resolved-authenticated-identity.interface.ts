@@ -1,4 +1,4 @@
-import type { UserStatus } from '@payroll/database';
+import type { RoleCode, UserStatus } from '@payroll/database';
 
 import type { AuthenticatedIdentity } from './authenticated-identity.interface';
 
@@ -7,6 +7,7 @@ export interface ApplicationUserIdentity {
   username: string;
   email: string;
   status: UserStatus;
+  roles: RoleCode[];
 }
 
 export interface ResolvedAuthenticatedIdentity extends AuthenticatedIdentity {

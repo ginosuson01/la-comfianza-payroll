@@ -5,7 +5,7 @@
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "generate": "prisma generate",
     "validate": "prisma validate",

@@ -7,6 +7,7 @@ import { CognitoTokenVerifierService } from './cognito/cognito-token-verifier.se
 import { CognitoUserAuthService } from './cognito/cognito-user-auth.service';
 import { DatabaseIdentityService } from './database-identity.service';
 import { CognitoAuthGuard } from './guards/cognito-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
 import { SignupService } from './signup/signup.service';
 
 @Module({
@@ -22,6 +23,11 @@ import { SignupService } from './signup/signup.service';
     {
       provide: APP_GUARD,
       useClass: CognitoAuthGuard,
+    },
+
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
     },
   ],
 
