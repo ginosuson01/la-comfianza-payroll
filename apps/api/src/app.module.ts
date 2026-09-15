@@ -13,6 +13,7 @@ import { DatabaseModule } from './database/database.module';
 import { UsersModule } from './users/users.module';
 
 import { CompaniesModule } from './companies/companies.module';
+import { EmployeesModule } from './employees/employees.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { CompaniesModule } from './companies/companies.module';
     AuthModule,
     UsersModule,
     CompaniesModule,
+    EmployeesModule,
     HealthModule,
   ],
 
