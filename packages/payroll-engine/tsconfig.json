@@ -11,6 +11,7 @@
     "rootDir": "src",
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
+    "rewriteRelativeImportExtensions": true,
     "skipLibCheck": true
   },
   "include": [

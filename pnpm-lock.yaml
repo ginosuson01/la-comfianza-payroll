@@ -31,6 +31,9 @@ importers:
       '@payroll/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@payroll/payroll-engine':
+        specifier: workspace:*
+        version: link:../../packages/payroll-engine
       '@prisma/adapter-pg':
         specifier: ^7.9.1
         version: 7.9.1

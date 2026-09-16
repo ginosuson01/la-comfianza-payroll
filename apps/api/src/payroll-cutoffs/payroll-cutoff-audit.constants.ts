@@ -1,0 +1,8 @@
+export const PAYROLL_CUTOFF_AUDIT_MODULE = 'PAYROLL_CUTOFF';
+
+export const PAYROLL_CUTOFF_ENTITY_TYPE = 'PayrollCutoff';
+
+export enum PayrollCutoffAuditAction {
+  LOCKED = 'PAYROLL_CUTOFF_LOCKED',
+  REOPENED = 'PAYROLL_CUTOFF_REOPENED',
+}

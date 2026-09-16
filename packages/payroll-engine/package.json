@@ -3,8 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "./dist-cjs/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist-cjs/index.js",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.cjs.json && node -e \"require('node:fs').writeFileSync('dist-cjs/package.json', '{\\\"type\\\":\\\"commonjs\\\"}\\n')\"",
     "test": "node --test",
     "test:watch": "node --test --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit"

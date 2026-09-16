@@ -45,3 +45,6 @@ temp/
 # Editor temporary files
 *.swp
 *.swo
+
+# CommonJS build output
+dist-cjs/

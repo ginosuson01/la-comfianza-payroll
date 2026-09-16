@@ -1,3 +1,5 @@
+export * from './attendance-summary.ts';
+
 export const PAYROLL_ENGINE_VERSION = '0.1.0';
 
 export interface PayrollEngineInfo {
