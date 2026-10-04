@@ -1,0 +1,8 @@
+export const COMPANY_COMPENSATION_AUDIT_MODULE = 'COMPANY_COMPENSATION';
+
+export const COMPANY_COMPENSATION_ENTITY_TYPE = 'CompanyCompensationRecord';
+
+export const CompanyCompensationAuditAction = {
+  CREATED: 'COMPANY_COMPENSATION_CREATED',
+  VERSION_CREATED: 'COMPANY_COMPENSATION_VERSION_CREATED',
+} as const;

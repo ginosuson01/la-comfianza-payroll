@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { LeaveTransactionType, LeaveUnit, Prisma } from '@payroll/database';
 
+import { resolveAnnualLeaveBalanceKind } from '../employees/employee-annual-leave-allocation';
 import { DTR_LEAVE_TRANSACTION_REFERENCE_TYPE } from './dtr-leave.constants';
 import { DtrPayrollConfigService } from './dtr-payroll-config.service';
 
@@ -40,6 +41,7 @@ export class DtrLeaveBalanceService {
       input.employeeId,
       input.companyId,
       input.leaveTypeId,
+      input.workDate,
       true,
     );
 
@@ -116,6 +118,7 @@ export class DtrLeaveBalanceService {
       input.employeeId,
       input.companyId,
       input.leaveTypeId,
+      input.workDate,
       false,
     );
 
@@ -191,6 +194,7 @@ export class DtrLeaveBalanceService {
     employeeId: string,
     companyId: string,
     leaveTypeId: string,
+    workDate: Date,
     requireAccount: boolean,
   ): Promise<TrackedLeaveContext | null> {
     const leaveType = await transaction.leaveType.findUnique({
@@ -235,11 +239,54 @@ export class DtrLeaveBalanceService {
       );
     }
 
+    const calendarYear = workDate.getUTCFullYear();
+
+    const entitlementCycle =
+      await transaction.employeeLeaveEntitlementCycle.findUnique({
+        where: {
+          employeeId_calendarYear: {
+            employeeId,
+            calendarYear,
+          },
+        },
+
+        select: {
+          id: true,
+          employeeType: true,
+          initializationReviewRequired: true,
+        },
+      });
+
+    if (!entitlementCycle) {
+      if (!requireAccount) {
+        return null;
+      }
+
+      throw new BadRequestException(
+        `Employee does not have an initialized ${calendarYear} leave entitlement.`,
+      );
+    }
+
+    if (requireAccount && entitlementCycle.initializationReviewRequired) {
+      throw new BadRequestException(
+        `${calendarYear} leave balances require Payroll Manager review before use.`,
+      );
+    }
+
+    const balanceKind = resolveAnnualLeaveBalanceKind(
+      entitlementCycle.employeeType,
+      leaveType.code,
+    );
+
+    if (!balanceKind) {
+      return null;
+    }
+
     const leaveAccount = await transaction.employeeLeaveAccount.findUnique({
       where: {
-        employeeId_leaveTypeId: {
-          employeeId,
-          leaveTypeId,
+        entitlementCycleId_balanceKind: {
+          entitlementCycleId: entitlementCycle.id,
+          balanceKind,
         },
       },
 
@@ -254,7 +301,7 @@ export class DtrLeaveBalanceService {
       }
 
       throw new BadRequestException(
-        `Employee does not have a ${leaveType.code} leave balance account.`,
+        `Employee does not have a ${leaveType.code} leave balance account for ${calendarYear}.`,
       );
     }
 

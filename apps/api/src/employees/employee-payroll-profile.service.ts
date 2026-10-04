@@ -30,6 +30,11 @@ export interface EmployeePayrollProfileView {
   updatedAt: Date;
 }
 
+export interface EmployeePayrollAccountRevealView {
+  accountNumber: string;
+  accountNumberLast4: string;
+}
+
 @Injectable()
 export class EmployeePayrollProfileService {
   constructor(
@@ -37,6 +42,173 @@ export class EmployeePayrollProfileService {
     private readonly auditLog: AuditLogService,
     private readonly fieldEncryption: FieldEncryptionService,
   ) {}
+
+  async getPayrollProfile(
+    employeeId: string,
+  ): Promise<EmployeePayrollProfileView | null> {
+    const employee = await this.prisma.employee.findUnique({
+      where: {
+        id: employeeId,
+      },
+
+      select: {
+        employmentRecords: {
+          where: {
+            endDate: null,
+          },
+
+          orderBy: {
+            startDate: 'desc',
+          },
+
+          take: 1,
+
+          select: {
+            id: true,
+
+            payrollProfile: {
+              select: {
+                id: true,
+
+                employmentRecordId: true,
+
+                payoutMethod: true,
+
+                bankName: true,
+
+                accountNumberLast4: true,
+
+                createdAt: true,
+                updatedAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Employee not found.');
+    }
+
+    const currentEmployment = employee.employmentRecords[0];
+
+    if (!currentEmployment) {
+      throw new NotFoundException('Current employment assignment not found.');
+    }
+
+    return currentEmployment.payrollProfile ?? null;
+  }
+
+  async revealPayrollAccount(
+    employeeId: string,
+    actorUserId: string,
+  ): Promise<EmployeePayrollAccountRevealView> {
+    const employee = await this.prisma.employee.findUnique({
+      where: {
+        id: employeeId,
+      },
+
+      select: {
+        id: true,
+        employeeNumber: true,
+
+        firstName: true,
+        lastName: true,
+
+        employmentRecords: {
+          where: {
+            endDate: null,
+          },
+
+          orderBy: {
+            startDate: 'desc',
+          },
+
+          take: 1,
+
+          select: {
+            id: true,
+
+            company: {
+              select: {
+                id: true,
+              },
+            },
+
+            payrollProfile: {
+              select: {
+                id: true,
+
+                payoutMethod: true,
+
+                accountNumberEncrypted: true,
+                accountNumberLast4: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Employee not found.');
+    }
+
+    const currentEmployment = employee.employmentRecords[0];
+
+    if (!currentEmployment) {
+      throw new NotFoundException('Current employment assignment not found.');
+    }
+
+    const profile = currentEmployment.payrollProfile;
+
+    if (
+      !profile ||
+      profile.payoutMethod !== PayoutMethod.ATM ||
+      !profile.accountNumberEncrypted ||
+      !profile.accountNumberLast4
+    ) {
+      throw new BadRequestException(
+        'ATM account is not configured for this employee.',
+      );
+    }
+
+    const accountNumber = this.fieldEncryption.decrypt(
+      profile.accountNumberEncrypted,
+    );
+
+    await this.auditLog.recordSuccess({
+      actorUserId,
+
+      companyId: currentEmployment.company.id,
+
+      action: EmployeeManagementAuditAction.PAYROLL_ACCOUNT_REVEALED,
+
+      module: EMPLOYEE_MANAGEMENT_AUDIT_MODULE,
+
+      entityType: EMPLOYEE_MANAGEMENT_ENTITY_TYPE,
+
+      entityId: employee.id,
+
+      reference: employee.employeeNumber,
+
+      details: `Revealed stored ATM account number for ${employee.firstName} ${employee.lastName} (${employee.employeeNumber}).`,
+
+      metadata: {
+        employmentRecordId: currentEmployment.id,
+
+        payrollProfileId: profile.id,
+
+        accountNumberLast4: profile.accountNumberLast4,
+      },
+    });
+
+    return {
+      accountNumber,
+      accountNumberLast4: profile.accountNumberLast4,
+    };
+  }
 
   async setPayrollProfile(
     employeeId: string,

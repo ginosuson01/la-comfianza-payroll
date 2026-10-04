@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   EmployeePayrollStatus,
+  EmployeeType,
   PayoutMethod,
   type Prisma,
 } from '@payroll/database';
@@ -68,6 +69,7 @@ describe('EmployeesService changeEmploymentAssignment', () => {
       {
         id: employmentRecordId,
         companyEmployeeNumber: 'YAK-001',
+        employeeType: EmployeeType.CLIENT_EMPLOYEE,
 
         startDate: new Date('2026-09-01T00:00:00.000Z'),
 
@@ -100,6 +102,7 @@ describe('EmployeesService changeEmploymentAssignment', () => {
 
   it('preserves history when changing department and position within the same company', async () => {
     const effectiveDate = new Date('2026-09-20T00:00:00.000Z');
+    const previousEmploymentEndDate = new Date('2026-09-19T00:00:00.000Z');
 
     const updatedEmployee = {
       ...currentEmployee,
@@ -108,6 +111,7 @@ describe('EmployeesService changeEmploymentAssignment', () => {
         {
           id: newEmploymentRecordId,
           companyEmployeeNumber: 'YAK-001',
+          employeeType: EmployeeType.CLIENT_EMPLOYEE,
 
           startDate: effectiveDate,
           endDate: null,
@@ -209,6 +213,7 @@ describe('EmployeesService changeEmploymentAssignment', () => {
       employeeId,
       {
         companyId,
+        employeeType: EmployeeType.CLIENT_EMPLOYEE,
         departmentId: newDepartmentId,
         positionId: newPositionId,
         effectiveDate: '2026-09-20',
@@ -222,7 +227,7 @@ describe('EmployeesService changeEmploymentAssignment', () => {
       },
 
       data: {
-        endDate: effectiveDate,
+        endDate: previousEmploymentEndDate,
       },
     });
 
@@ -236,6 +241,7 @@ describe('EmployeesService changeEmploymentAssignment', () => {
         positionId: newPositionId,
 
         companyEmployeeNumber: 'YAK-001',
+        employeeType: EmployeeType.CLIENT_EMPLOYEE,
 
         startDate: effectiveDate,
       },
@@ -271,6 +277,9 @@ describe('EmployeesService changeEmploymentAssignment', () => {
 
         previousCompanyId: companyId,
         newCompanyId: companyId,
+
+        previousEmployeeType: EmployeeType.CLIENT_EMPLOYEE,
+        newEmployeeType: EmployeeType.CLIENT_EMPLOYEE,
 
         previousDepartmentId: departmentId,
         newDepartmentId,
@@ -385,6 +394,7 @@ describe('EmployeesService changeEmploymentAssignment', () => {
       employeeId,
       {
         companyId: newCompanyId,
+        employeeType: EmployeeType.CLIENT_EMPLOYEE,
         effectiveDate: '2026-09-25',
       },
       actorUserId,
@@ -400,6 +410,7 @@ describe('EmployeesService changeEmploymentAssignment', () => {
         positionId: null,
 
         companyEmployeeNumber: null,
+        employeeType: EmployeeType.CLIENT_EMPLOYEE,
 
         startDate: effectiveDate,
       },
@@ -463,6 +474,7 @@ describe('EmployeesService changeEmploymentAssignment', () => {
       employeeId,
       {
         companyId,
+        employeeType: EmployeeType.CLIENT_EMPLOYEE,
         departmentId,
         positionId,
         companyEmployeeNumber: 'YAK-001',
@@ -500,6 +512,7 @@ describe('EmployeesService changeEmploymentAssignment', () => {
         employeeId,
         {
           companyId,
+          employeeType: EmployeeType.CLIENT_EMPLOYEE,
           effectiveDate: '2026-09-01',
         },
         actorUserId,

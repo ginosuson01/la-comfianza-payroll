@@ -1,6 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import {
+  EmployeeType,
   HolidayType,
+  LeaveBalanceKind,
   LeaveUnit,
   OvertimeType,
   Prisma,
@@ -30,6 +32,10 @@ describe('DtrEntryValidationService', () => {
 
   const leaveAccountId = '88888888-8888-4888-8888-888888888888';
 
+  const entitlementCycleId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+
+  const slLeaveTypeId = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff';
+
   const existingEntryId = '99999999-9999-4999-8999-999999999999';
 
   const workDate = new Date('2026-09-05T00:00:00.000Z');
@@ -38,6 +44,11 @@ describe('DtrEntryValidationService', () => {
 
   const prismaMock = {
     leaveType: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+    },
+
+    employeeLeaveEntitlementCycle: {
       findUnique: jest.fn(),
     },
 
@@ -123,6 +134,21 @@ describe('DtrEntryValidationService', () => {
         quantity: null,
       },
     });
+
+    prismaMock.employeeLeaveEntitlementCycle.findUnique.mockResolvedValue({
+      id: entitlementCycleId,
+      employeeType: EmployeeType.LACOM_INTERNAL,
+      initializationReviewRequired: false,
+    });
+
+    prismaMock.leaveType.findMany.mockResolvedValue([
+      {
+        id: leaveTypeId,
+      },
+      {
+        id: slLeaveTypeId,
+      },
+    ]);
 
     service = new DtrEntryValidationService(
       prismaMock as unknown as PrismaService,
@@ -343,11 +369,28 @@ describe('DtrEntryValidationService', () => {
       ),
     ).resolves.toBeUndefined();
 
+    expect(
+      prismaMock.employeeLeaveEntitlementCycle.findUnique,
+    ).toHaveBeenCalledWith({
+      where: {
+        employeeId_calendarYear: {
+          employeeId,
+          calendarYear: 2026,
+        },
+      },
+
+      select: {
+        id: true,
+        employeeType: true,
+        initializationReviewRequired: true,
+      },
+    });
+
     expect(prismaMock.employeeLeaveAccount.findUnique).toHaveBeenCalledWith({
       where: {
-        employeeId_leaveTypeId: {
-          employeeId,
-          leaveTypeId,
+        entitlementCycleId_balanceKind: {
+          entitlementCycleId,
+          balanceKind: LeaveBalanceKind.VL,
         },
       },
 
@@ -356,6 +399,120 @@ describe('DtrEntryValidationService', () => {
         currentBalance: true,
       },
     });
+  });
+
+  it('validates client VL and SL against one shared annual balance', async () => {
+    mockValidLeaveType('VL');
+
+    prismaMock.employeeLeaveEntitlementCycle.findUnique.mockResolvedValue({
+      id: entitlementCycleId,
+      employeeType: EmployeeType.CLIENT_EMPLOYEE,
+      initializationReviewRequired: false,
+    });
+
+    prismaMock.employeeLeaveAccount.findUnique.mockResolvedValue({
+      id: leaveAccountId,
+      currentBalance: new Prisma.Decimal('0.7500'),
+    });
+
+    prismaMock.dtrEntry.findMany.mockResolvedValue([
+      {
+        id: existingEntryId,
+        workDate: otherWorkDate,
+        leaveMinutes: 240,
+      },
+    ]);
+
+    payrollConfigServiceMock.convertLeaveMinutesToDays
+      .mockResolvedValueOnce(new Prisma.Decimal('0.5000'))
+      .mockResolvedValueOnce(new Prisma.Decimal('0.5000'));
+
+    await expect(
+      service.validateEntry(
+        createInput({
+          leaveMinutes: 240,
+          leaveTypeId,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prismaMock.employeeLeaveAccount.findUnique).toHaveBeenCalledWith({
+      where: {
+        entitlementCycleId_balanceKind: {
+          entitlementCycleId,
+          balanceKind: LeaveBalanceKind.SHARED_VL_SL_POOL,
+        },
+      },
+
+      select: {
+        id: true,
+        currentBalance: true,
+      },
+    });
+
+    expect(prismaMock.leaveType.findMany).toHaveBeenCalledWith({
+      where: {
+        companyId,
+
+        code: {
+          in: ['VL', 'SL'],
+        },
+      },
+
+      select: {
+        id: true,
+      },
+    });
+
+    expect(prismaMock.dtrEntry.findMany).toHaveBeenCalledWith({
+      where: {
+        dtrId,
+
+        leaveTypeId: {
+          in: [leaveTypeId, slLeaveTypeId],
+        },
+
+        workDate: {
+          gte: new Date('2026-01-01T00:00:00.000Z'),
+          lt: new Date('2027-01-01T00:00:00.000Z'),
+        },
+
+        leaveMinutes: {
+          gt: 0,
+        },
+      },
+
+      select: {
+        id: true,
+        workDate: true,
+        leaveMinutes: true,
+      },
+    });
+  });
+
+  it('blocks leave validation while the annual balance requires review', async () => {
+    mockValidLeaveType('VL');
+
+    prismaMock.employeeLeaveEntitlementCycle.findUnique.mockResolvedValue({
+      id: entitlementCycleId,
+      employeeType: EmployeeType.LACOM_INTERNAL,
+      initializationReviewRequired: true,
+    });
+
+    await expect(
+      service.validateEntry(
+        createInput({
+          leaveMinutes: 240,
+          leaveTypeId,
+        }),
+      ),
+    ).rejects.toThrow(
+      '2026 leave balances require Payroll Manager review before use.',
+    );
+
+    expect(prismaMock.employeeLeaveAccount.findUnique).not.toHaveBeenCalled();
+
+    expect(prismaMock.dtrEntry.findMany).not.toHaveBeenCalled();
   });
 
   it('treats a missing VL account as zero available balance', async () => {

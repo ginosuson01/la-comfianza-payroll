@@ -7,6 +7,7 @@ import { LeaveTransactionType, LeaveUnit, Prisma } from '@payroll/database';
 
 import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../database/prisma.service';
+import { resolveAnnualLeaveBalanceKind } from './employee-annual-leave-allocation';
 import type {
   AdjustEmployeeLeaveCreditDto,
   EmployeeLeaveCode,
@@ -68,29 +69,6 @@ export class EmployeeLeaveCreditService {
 
         firstName: true,
         lastName: true,
-
-        employmentRecords: {
-          where: {
-            endDate: null,
-          },
-
-          orderBy: {
-            startDate: 'desc',
-          },
-
-          take: 1,
-
-          select: {
-            id: true,
-            startDate: true,
-
-            company: {
-              select: {
-                id: true,
-              },
-            },
-          },
-        },
       },
     });
 
@@ -98,19 +76,7 @@ export class EmployeeLeaveCreditService {
       throw new NotFoundException('Employee not found.');
     }
 
-    const currentEmployment = employee.employmentRecords[0];
-
-    if (!currentEmployment) {
-      throw new NotFoundException('Current employment assignment not found.');
-    }
-
     const effectiveDate = new Date(input.effectiveDate);
-
-    if (effectiveDate < currentEmployment.startDate) {
-      throw new BadRequestException(
-        'Leave credit effective date cannot be before the current employment start date.',
-      );
-    }
 
     const quantity = new Prisma.Decimal(input.quantity);
 
@@ -120,12 +86,64 @@ export class EmployeeLeaveCreditService {
       );
     }
 
-    const companyId = currentEmployment.company.id;
-
     const leaveName = getLeaveTypeName(input.leaveCode);
 
     const result = await this.prisma.$transaction(
       async (transaction: Prisma.TransactionClient) => {
+        const calendarYear = effectiveDate.getUTCFullYear();
+
+        const entitlementCycle =
+          await transaction.employeeLeaveEntitlementCycle.findUnique({
+            where: {
+              employeeId_calendarYear: {
+                employeeId,
+                calendarYear,
+              },
+            },
+
+            select: {
+              id: true,
+              employmentRecordId: true,
+              employeeType: true,
+              effectiveFrom: true,
+              expiresOn: true,
+
+              employmentRecord: {
+                select: {
+                  companyId: true,
+                },
+              },
+            },
+          });
+
+        if (!entitlementCycle) {
+          throw new BadRequestException(
+            `Employee does not have an initialized ${calendarYear} leave entitlement.`,
+          );
+        }
+
+        if (
+          effectiveDate < entitlementCycle.effectiveFrom ||
+          effectiveDate > entitlementCycle.expiresOn
+        ) {
+          throw new BadRequestException(
+            `Leave credit effective date is outside the ${calendarYear} entitlement period.`,
+          );
+        }
+
+        const balanceKind = resolveAnnualLeaveBalanceKind(
+          entitlementCycle.employeeType,
+          input.leaveCode,
+        );
+
+        if (!balanceKind) {
+          throw new BadRequestException(
+            'Unsupported annual leave balance type.',
+          );
+        }
+
+        const companyId = entitlementCycle.employmentRecord.companyId;
+
         const leaveType = await transaction.leaveType.upsert({
           where: {
             companyId_code: {
@@ -166,9 +184,9 @@ export class EmployeeLeaveCreditService {
         const existingAccount =
           await transaction.employeeLeaveAccount.findUnique({
             where: {
-              employeeId_leaveTypeId: {
-                employeeId,
-                leaveTypeId: leaveType.id,
+              entitlementCycleId_balanceKind: {
+                entitlementCycleId: entitlementCycle.id,
+                balanceKind,
               },
             },
 
@@ -178,8 +196,13 @@ export class EmployeeLeaveCreditService {
             },
           });
 
-        const previousBalance =
-          existingAccount?.currentBalance ?? new Prisma.Decimal(0);
+        if (!existingAccount) {
+          throw new BadRequestException(
+            `Employee does not have an initialized ${input.leaveCode} leave balance for ${calendarYear}.`,
+          );
+        }
+
+        const previousBalance = existingAccount.currentBalance;
 
         const currentBalance = previousBalance.plus(quantity);
 
@@ -189,34 +212,20 @@ export class EmployeeLeaveCreditService {
           );
         }
 
-        const leaveAccount = existingAccount
-          ? await transaction.employeeLeaveAccount.update({
-              where: {
-                id: existingAccount.id,
-              },
+        const leaveAccount = await transaction.employeeLeaveAccount.update({
+          where: {
+            id: existingAccount.id,
+          },
 
-              data: {
-                currentBalance,
-              },
+          data: {
+            currentBalance,
+          },
 
-              select: {
-                id: true,
-                currentBalance: true,
-              },
-            })
-          : await transaction.employeeLeaveAccount.create({
-              data: {
-                employeeId,
-                leaveTypeId: leaveType.id,
-
-                currentBalance,
-              },
-
-              select: {
-                id: true,
-                currentBalance: true,
-              },
-            });
+          select: {
+            id: true,
+            currentBalance: true,
+          },
+        });
 
         const leaveTransaction = await transaction.leaveTransaction.create({
           data: {
@@ -259,7 +268,11 @@ export class EmployeeLeaveCreditService {
           details: `Adjusted ${input.leaveCode} balance for ${employee.firstName} ${employee.lastName} (${employee.employeeNumber}) by ${quantity.toString()} day(s).`,
 
           metadata: {
-            employmentRecordId: currentEmployment.id,
+            employmentRecordId: entitlementCycle.employmentRecordId,
+
+            leaveEntitlementCycleId: entitlementCycle.id,
+
+            balanceKind,
 
             leaveAccountId: leaveAccount.id,
 
@@ -286,6 +299,8 @@ export class EmployeeLeaveCreditService {
         });
 
         return {
+          companyId,
+
           leaveAccountId: leaveAccount.id,
 
           leaveTransactionId: leaveTransaction.id,
@@ -317,8 +332,6 @@ export class EmployeeLeaveCreditService {
       employeeId: employee.id,
 
       employeeNumber: employee.employeeNumber,
-
-      companyId,
 
       leaveCode: input.leaveCode,
     };

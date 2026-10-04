@@ -59,6 +59,8 @@ describe('DtrAttendanceSummaryController', () => {
       leaveBreakdown: [],
       overtimeBreakdown: [],
       holidayBreakdown: [],
+
+      premiumWorkBreakdown: [],
     },
   };
 

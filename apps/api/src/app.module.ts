@@ -16,6 +16,7 @@ import { CompaniesModule } from './companies/companies.module';
 import { EmployeesModule } from './employees/employees.module';
 import { DtrsModule } from './dtrs/dtrs.module';
 import { PayrollCutoffsModule } from './payroll-cutoffs/payroll-cutoffs.module';
+import { PayrollModule } from './payroll/payroll.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { PayrollCutoffsModule } from './payroll-cutoffs/payroll-cutoffs.module';
     EmployeesModule,
     DtrsModule,
     PayrollCutoffsModule,
+    PayrollModule,
     HealthModule,
   ],
 

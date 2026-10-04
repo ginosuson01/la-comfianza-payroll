@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   EmployeePayrollStatus,
+  type EmployeeType,
   type PayoutMethod,
   type Prisma,
 } from '@payroll/database';
@@ -13,6 +14,8 @@ import {
 import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../database/prisma.service';
 import type { ChangeEmploymentAssignmentDto } from './dto/change-employment-assignment.dto';
+import type { CorrectEmploymentStartDateDto } from './dto/correct-employment-start-date.dto';
+import type { CorrectEmploymentTypeDto } from './dto/correct-employment-type.dto';
 import type { CreateEmployeeDto } from './dto/create-employee.dto';
 import type { ListEmployeesQueryDto } from './dto/list-employees-query.dto';
 import type { UpdateEmployeeDto } from './dto/update-employee.dto';
@@ -55,6 +58,7 @@ const EMPLOYEE_SELECT = {
     select: {
       id: true,
       companyEmployeeNumber: true,
+      employeeType: true,
       startDate: true,
       endDate: true,
 
@@ -94,6 +98,7 @@ const EMPLOYEE_SELECT = {
 interface EmploymentSummary {
   id: string;
   companyEmployeeNumber: string | null;
+  employeeType: EmployeeType | null;
 
   startDate: Date;
   endDate: Date | null;
@@ -132,6 +137,14 @@ export interface EmployeeDirectoryView {
 
   email: string | null;
   mobile: string | null;
+
+  addressLine1: string | null;
+  addressLine2: string | null;
+  barangay: string | null;
+  city: string | null;
+  province: string | null;
+  postalCode: string | null;
+  country: string;
 
   currentStatus: EmployeePayrollStatus;
 
@@ -297,8 +310,6 @@ export class EmployeesService {
     input: CreateEmployeeDto,
     actorUserId: string,
   ): Promise<EmployeeDirectoryView> {
-    await this.validateEmployeeNumber(input.employeeNumber);
-
     await this.validateEmploymentAssignmentReferences(
       input.companyId,
       input.departmentId,
@@ -322,9 +333,23 @@ export class EmployeesService {
 
     try {
       const employee = await this.prisma.$transaction(async (transaction) => {
+        const sequenceRows = await transaction.$queryRaw<
+          Array<{ value: string }>
+        >`
+            SELECT nextval('employee_number_seq')::text AS value
+          `;
+
+        const sequenceValue = sequenceRows[0]?.value;
+
+        if (!sequenceValue) {
+          throw new Error('Unable to generate employee number.');
+        }
+
+        const employeeNumber = `EMP-${sequenceValue.padStart(6, '0')}`;
+
         const createdEmployee = await transaction.employee.create({
           data: {
-            employeeNumber: input.employeeNumber,
+            employeeNumber,
 
             firstName: input.firstName,
             middleName: input.middleName ?? null,
@@ -366,6 +391,7 @@ export class EmployeesService {
             positionId: input.positionId ?? null,
 
             companyEmployeeNumber: input.companyEmployeeNumber ?? null,
+            employeeType: input.employeeType,
 
             startDate: employmentDate,
           },
@@ -414,6 +440,7 @@ export class EmployeesService {
             employeeNumber: createdEmployee.employeeNumber,
             status,
             companyId: input.companyId,
+            employeeType: input.employeeType,
             employmentDate: input.employmentDate,
 
             ...(input.companyEmployeeNumber
@@ -630,6 +657,299 @@ export class EmployeesService {
     return this.toDirectoryView(updatedEmployee);
   }
 
+  async correctEmploymentStartDate(
+    employeeId: string,
+    input: CorrectEmploymentStartDateDto,
+    actorUserId: string,
+  ): Promise<EmployeeDirectoryView> {
+    const employee = await this.prisma.employee.findUnique({
+      where: {
+        id: employeeId,
+      },
+
+      select: EMPLOYEE_SELECT,
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Employee not found.');
+    }
+
+    const currentEmployment = this.getCurrentEmployment(employee);
+
+    if (!currentEmployment || currentEmployment.endDate !== null) {
+      throw new NotFoundException('Current employment assignment not found.');
+    }
+
+    const correctedStartDate = new Date(input.correctedStartDate);
+
+    if (
+      correctedStartDate.getTime() === currentEmployment.startDate.getTime()
+    ) {
+      throw new BadRequestException(
+        'Corrected employment start date must be different from the current employment start date.',
+      );
+    }
+
+    const previousEmployment = await this.prisma.employmentRecord.findFirst({
+      where: {
+        employeeId,
+
+        id: {
+          not: currentEmployment.id,
+        },
+
+        endDate: {
+          not: null,
+        },
+      },
+
+      orderBy: {
+        endDate: 'desc',
+      },
+
+      select: {
+        id: true,
+        endDate: true,
+      },
+    });
+
+    if (
+      previousEmployment?.endDate &&
+      correctedStartDate <= previousEmployment.endDate
+    ) {
+      throw new BadRequestException(
+        'Corrected employment start date cannot be before the previous employment assignment end date.',
+      );
+    }
+
+    const [
+      dtrCount,
+      payrollResultCount,
+      earliestCompensation,
+      earliestRecurringItem,
+    ] = await this.prisma.$transaction([
+      this.prisma.dtr.count({
+        where: {
+          employmentRecordId: currentEmployment.id,
+        },
+      }),
+
+      this.prisma.payrollRunEmployee.count({
+        where: {
+          employmentRecordId: currentEmployment.id,
+        },
+      }),
+
+      this.prisma.compensationRecord.findFirst({
+        where: {
+          employmentRecordId: currentEmployment.id,
+        },
+
+        orderBy: {
+          effectiveFrom: 'asc',
+        },
+
+        select: {
+          effectiveFrom: true,
+        },
+      }),
+
+      this.prisma.recurringPayrollItem.findFirst({
+        where: {
+          employmentRecordId: currentEmployment.id,
+        },
+
+        orderBy: {
+          effectiveFrom: 'asc',
+        },
+
+        select: {
+          effectiveFrom: true,
+        },
+      }),
+    ]);
+
+    if (dtrCount > 0) {
+      throw new BadRequestException(
+        'Employment start date cannot be corrected because DTR history already exists for this employment assignment.',
+      );
+    }
+
+    if (payrollResultCount > 0) {
+      throw new BadRequestException(
+        'Employment start date cannot be corrected because payroll history already exists for this employment assignment.',
+      );
+    }
+
+    if (
+      earliestCompensation &&
+      correctedStartDate > earliestCompensation.effectiveFrom
+    ) {
+      throw new BadRequestException(
+        'Corrected employment start date cannot be after an existing compensation effective date.',
+      );
+    }
+
+    if (
+      earliestRecurringItem &&
+      correctedStartDate > earliestRecurringItem.effectiveFrom
+    ) {
+      throw new BadRequestException(
+        'Corrected employment start date cannot be after an existing recurring payroll item effective date.',
+      );
+    }
+
+    const previousStartDate = currentEmployment.startDate;
+
+    const updatedEmployee = await this.prisma.$transaction(
+      async (transaction) => {
+        await transaction.employmentRecord.update({
+          where: {
+            id: currentEmployment.id,
+          },
+
+          data: {
+            startDate: correctedStartDate,
+          },
+        });
+
+        await this.auditLog.recordSuccessInTransaction(transaction, {
+          actorUserId,
+
+          companyId: currentEmployment.company.id,
+
+          action: 'EMPLOYMENT_START_DATE_CORRECTED',
+
+          module: EMPLOYEE_MANAGEMENT_AUDIT_MODULE,
+
+          entityType: EMPLOYEE_MANAGEMENT_ENTITY_TYPE,
+
+          entityId: employee.id,
+
+          reference: employee.employeeNumber,
+
+          details: `Corrected employment start date for ${employee.firstName} ${employee.lastName} (${employee.employeeNumber}).`,
+
+          metadata: {
+            employmentRecordId: currentEmployment.id,
+
+            previousStartDate: previousStartDate.toISOString().slice(0, 10),
+
+            correctedStartDate: input.correctedStartDate,
+
+            reason: input.reason,
+          },
+        });
+
+        return transaction.employee.findUniqueOrThrow({
+          where: {
+            id: employeeId,
+          },
+
+          select: EMPLOYEE_SELECT,
+        });
+      },
+    );
+
+    return this.toDirectoryView(updatedEmployee);
+  }
+
+  async correctEmploymentType(
+    employeeId: string,
+    input: CorrectEmploymentTypeDto,
+    actorUserId: string,
+  ): Promise<EmployeeDirectoryView> {
+    const employee = await this.prisma.employee.findUnique({
+      where: {
+        id: employeeId,
+      },
+
+      select: EMPLOYEE_SELECT,
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Employee not found.');
+    }
+
+    const currentEmployment = this.getCurrentEmployment(employee);
+
+    if (!currentEmployment || currentEmployment.endDate !== null) {
+      throw new NotFoundException('Current employment assignment not found.');
+    }
+
+    if (input.employeeType === currentEmployment.employeeType) {
+      throw new BadRequestException(
+        'Employee type must be different from the current employee type.',
+      );
+    }
+
+    const leaveCycleCount =
+      await this.prisma.employeeLeaveEntitlementCycle.count({
+        where: {
+          employmentRecordId: currentEmployment.id,
+        },
+      });
+
+    if (leaveCycleCount > 0) {
+      throw new BadRequestException(
+        'Employee type cannot be corrected because annual leave entitlement history already exists for this employment assignment.',
+      );
+    }
+
+    const previousEmployeeType = currentEmployment.employeeType;
+
+    const updatedEmployee = await this.prisma.$transaction(
+      async (transaction) => {
+        await transaction.employmentRecord.update({
+          where: {
+            id: currentEmployment.id,
+          },
+
+          data: {
+            employeeType: input.employeeType,
+          },
+        });
+
+        await this.auditLog.recordSuccessInTransaction(transaction, {
+          actorUserId,
+
+          companyId: currentEmployment.company.id,
+
+          action: EmployeeManagementAuditAction.EMPLOYMENT_TYPE_CORRECTED,
+
+          module: EMPLOYEE_MANAGEMENT_AUDIT_MODULE,
+
+          entityType: EMPLOYEE_MANAGEMENT_ENTITY_TYPE,
+
+          entityId: employee.id,
+
+          reference: employee.employeeNumber,
+
+          details: `Corrected employment type for ${employee.firstName} ${employee.lastName} (${employee.employeeNumber}).`,
+
+          metadata: {
+            employmentRecordId: currentEmployment.id,
+
+            previousEmployeeType,
+            newEmployeeType: input.employeeType,
+
+            reason: input.reason,
+          },
+        });
+
+        return transaction.employee.findUniqueOrThrow({
+          where: {
+            id: employeeId,
+          },
+
+          select: EMPLOYEE_SELECT,
+        });
+      },
+    );
+
+    return this.toDirectoryView(updatedEmployee);
+  }
+
   async changeEmploymentAssignment(
     employeeId: string,
     input: ChangeEmploymentAssignmentDto,
@@ -660,6 +980,11 @@ export class EmployeesService {
         'Employment change effective date must be after the current employment start date.',
       );
     }
+
+    const previousEmploymentEndDate = new Date(effectiveDate);
+    previousEmploymentEndDate.setUTCDate(
+      previousEmploymentEndDate.getUTCDate() - 1,
+    );
 
     const companyChanged = input.companyId !== currentEmployment.company.id;
 
@@ -704,6 +1029,7 @@ export class EmployeesService {
 
     const assignmentUnchanged =
       input.companyId === currentEmployment.company.id &&
+      input.employeeType === currentEmployment.employeeType &&
       departmentId === (currentEmployment.department?.id ?? null) &&
       positionId === (currentEmployment.position?.id ?? null) &&
       companyEmployeeNumber === currentEmployment.companyEmployeeNumber;
@@ -720,7 +1046,7 @@ export class EmployeesService {
           },
 
           data: {
-            endDate: effectiveDate,
+            endDate: previousEmploymentEndDate,
           },
         });
 
@@ -734,6 +1060,7 @@ export class EmployeesService {
             positionId,
 
             companyEmployeeNumber,
+            employeeType: input.employeeType,
 
             startDate: effectiveDate,
           },
@@ -769,6 +1096,9 @@ export class EmployeesService {
             previousCompanyId: currentEmployment.company.id,
             newCompanyId: input.companyId,
 
+            previousEmployeeType: currentEmployment.employeeType,
+            newEmployeeType: input.employeeType,
+
             previousDepartmentId: currentEmployment.department?.id ?? null,
             newDepartmentId: departmentId,
 
@@ -792,22 +1122,6 @@ export class EmployeesService {
     );
 
     return this.toDirectoryView(updatedEmployee);
-  }
-
-  private async validateEmployeeNumber(employeeNumber: string): Promise<void> {
-    const existingEmployee = await this.prisma.employee.findUnique({
-      where: {
-        employeeNumber,
-      },
-
-      select: {
-        id: true,
-      },
-    });
-
-    if (existingEmployee) {
-      throw new ConflictException('Employee number already exists.');
-    }
   }
 
   private async validateEmploymentAssignmentReferences(
@@ -934,6 +1248,14 @@ export class EmployeesService {
       email: employee.email,
       mobile: employee.mobile,
 
+      addressLine1: employee.addressLine1,
+      addressLine2: employee.addressLine2,
+      barangay: employee.barangay,
+      city: employee.city,
+      province: employee.province,
+      postalCode: employee.postalCode,
+      country: employee.country,
+
       currentStatus: employee.currentStatus,
 
       currentEmployment: currentEmployment
@@ -941,6 +1263,7 @@ export class EmployeesService {
             id: currentEmployment.id,
 
             companyEmployeeNumber: currentEmployment.companyEmployeeNumber,
+            employeeType: currentEmployment.employeeType,
 
             startDate: currentEmployment.startDate,
             endDate: currentEmployment.endDate,

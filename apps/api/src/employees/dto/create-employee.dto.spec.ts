@@ -2,7 +2,7 @@ import 'reflect-metadata';
 
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { EmployeePayrollStatus } from '@payroll/database';
+import { EmployeePayrollStatus, EmployeeType } from '@payroll/database';
 
 import { CreateEmployeeDto } from './create-employee.dto';
 
@@ -11,8 +11,6 @@ describe('CreateEmployeeDto', () => {
 
   it('accepts valid employee creation data', async () => {
     const dto = plainToInstance(CreateEmployeeDto, {
-      employeeNumber: ' EMP-0001 ',
-
       firstName: ' Gino ',
       middleName: ' Dela Cruz ',
       lastName: ' Suson ',
@@ -21,6 +19,7 @@ describe('CreateEmployeeDto', () => {
       mobile: '+639171234567',
 
       companyId,
+      employeeType: EmployeeType.LACOM_INTERNAL,
 
       employmentDate: '2026-09-01',
 
@@ -31,7 +30,6 @@ describe('CreateEmployeeDto', () => {
 
     expect(errors).toHaveLength(0);
 
-    expect(dto.employeeNumber).toBe('EMP-0001');
     expect(dto.firstName).toBe('Gino');
     expect(dto.middleName).toBe('Dela Cruz');
     expect(dto.lastName).toBe('Suson');
@@ -45,6 +43,7 @@ describe('CreateEmployeeDto', () => {
       lastName: 'Suson',
 
       companyId: 'invalid-company-id',
+      employeeType: EmployeeType.LACOM_INTERNAL,
 
       employmentDate: '2026-09-01',
     });
@@ -62,6 +61,7 @@ describe('CreateEmployeeDto', () => {
       lastName: 'Suson',
 
       companyId,
+      employeeType: EmployeeType.LACOM_INTERNAL,
 
       employmentDate: 'not-a-date',
     });
@@ -79,6 +79,7 @@ describe('CreateEmployeeDto', () => {
       lastName: 'Suson',
 
       companyId,
+      employeeType: EmployeeType.LACOM_INTERNAL,
 
       employmentDate: '2026-09-01',
 
@@ -100,6 +101,7 @@ describe('CreateEmployeeDto', () => {
       email: 'not-an-email',
 
       companyId,
+      employeeType: EmployeeType.LACOM_INTERNAL,
 
       employmentDate: '2026-09-01',
     });

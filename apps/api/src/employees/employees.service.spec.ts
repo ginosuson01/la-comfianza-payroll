@@ -1,6 +1,7 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import {
   EmployeePayrollStatus,
+  EmployeeType,
   PayoutMethod,
   type Prisma,
 } from '@payroll/database';
@@ -28,7 +29,7 @@ describe('EmployeesService', () => {
 
   const employeeRecord = {
     id: employeeId,
-    employeeNumber: 'EMP-0001',
+    employeeNumber: 'EMP-000001',
 
     firstName: 'Gino',
     middleName: 'Dela Cruz',
@@ -47,6 +48,7 @@ describe('EmployeesService', () => {
       {
         id: employmentRecordId,
         companyEmployeeNumber: 'YAK-001',
+        employeeType: EmployeeType.LACOM_INTERNAL,
 
         startDate: new Date('2026-09-01T00:00:00.000Z'),
         endDate: null,
@@ -109,7 +111,7 @@ describe('EmployeesService', () => {
 
       expect(result.items[0]).toEqual({
         id: employeeId,
-        employeeNumber: 'EMP-0001',
+        employeeNumber: 'EMP-000001',
 
         firstName: 'Gino',
         middleName: 'Dela Cruz',
@@ -126,6 +128,7 @@ describe('EmployeesService', () => {
         currentEmployment: {
           id: employmentRecordId,
           companyEmployeeNumber: 'YAK-001',
+          employeeType: EmployeeType.LACOM_INTERNAL,
 
           startDate: new Date('2026-09-01T00:00:00.000Z'),
           endDate: null,
@@ -297,7 +300,7 @@ describe('EmployeesService', () => {
     it('creates employee, employment, status history and audit atomically', async () => {
       const employeeCreate = jest.fn().mockResolvedValue({
         id: employeeId,
-        employeeNumber: 'EMP-0001',
+        employeeNumber: 'EMP-000001',
 
         firstName: 'Gino',
         middleName: 'Dela Cruz',
@@ -316,6 +319,12 @@ describe('EmployeesService', () => {
       const findUniqueOrThrow = jest.fn().mockResolvedValue(employeeRecord);
 
       const transaction = {
+        $queryRaw: jest.fn().mockResolvedValue([
+          {
+            value: '1',
+          },
+        ]),
+
         employee: {
           create: employeeCreate,
           findUniqueOrThrow,
@@ -380,8 +389,6 @@ describe('EmployeesService', () => {
 
       const result = await service.createEmployee(
         {
-          employeeNumber: 'EMP-0001',
-
           firstName: 'Gino',
           middleName: 'Dela Cruz',
           lastName: 'Suson',
@@ -390,6 +397,7 @@ describe('EmployeesService', () => {
           mobile: '+639171234567',
 
           companyId,
+          employeeType: EmployeeType.LACOM_INTERNAL,
           departmentId,
           positionId,
 
@@ -405,7 +413,7 @@ describe('EmployeesService', () => {
 
       expect(employeeCreate).toHaveBeenCalledWith({
         data: {
-          employeeNumber: 'EMP-0001',
+          employeeNumber: 'EMP-000001',
 
           firstName: 'Gino',
           middleName: 'Dela Cruz',
@@ -446,6 +454,7 @@ describe('EmployeesService', () => {
           positionId,
 
           companyEmployeeNumber: 'YAK-001',
+          employeeType: EmployeeType.LACOM_INTERNAL,
 
           startDate: new Date('2026-09-01'),
         },
@@ -477,16 +486,17 @@ describe('EmployeesService', () => {
 
         entityId: employeeId,
 
-        reference: 'EMP-0001',
+        reference: 'EMP-000001',
 
-        details: 'Created employee Gino Dela Cruz Suson (EMP-0001).',
+        details: 'Created employee Gino Dela Cruz Suson (EMP-000001).',
 
         metadata: {
-          employeeNumber: 'EMP-0001',
+          employeeNumber: 'EMP-000001',
 
           status: EmployeePayrollStatus.ACTIVE,
 
           companyId,
+          employeeType: EmployeeType.LACOM_INTERNAL,
 
           employmentDate: '2026-09-01',
 
@@ -501,48 +511,6 @@ describe('EmployeesService', () => {
       expect(result.id).toBe(employeeId);
       expect(result.fullName).toBe('Gino Dela Cruz Suson');
       expect(result.currentStatus).toBe(EmployeePayrollStatus.ACTIVE);
-    });
-
-    it('rejects an existing employee number before starting transaction', async () => {
-      const executeTransaction = jest.fn();
-
-      const prisma = {
-        employee: {
-          findUnique: jest.fn().mockResolvedValue({
-            id: employeeId,
-          }),
-        },
-
-        $transaction: executeTransaction,
-      } as unknown as PrismaService;
-
-      const recordSuccessInTransaction = jest.fn();
-
-      const auditLog = {
-        recordSuccessInTransaction,
-      } as unknown as AuditLogService;
-
-      const service = new EmployeesService(prisma, auditLog);
-
-      await expect(
-        service.createEmployee(
-          {
-            employeeNumber: 'EMP-0001',
-
-            firstName: 'Gino',
-            lastName: 'Suson',
-
-            companyId,
-
-            employmentDate: '2026-09-01',
-          },
-
-          actorUserId,
-        ),
-      ).rejects.toBeInstanceOf(ConflictException);
-
-      expect(executeTransaction).not.toHaveBeenCalled();
-      expect(recordSuccessInTransaction).not.toHaveBeenCalled();
     });
 
     it('rejects a department outside the selected company', async () => {
@@ -575,12 +543,11 @@ describe('EmployeesService', () => {
       await expect(
         service.createEmployee(
           {
-            employeeNumber: 'EMP-0001',
-
             firstName: 'Gino',
             lastName: 'Suson',
 
             companyId,
+            employeeType: EmployeeType.CLIENT_EMPLOYEE,
             departmentId,
 
             employmentDate: '2026-09-01',

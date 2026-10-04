@@ -1,0 +1,590 @@
+import {
+  useEffect,
+  useState,
+} from 'react'
+
+import { ApiError } from '../api/client'
+import {
+  getPayrollRunDetail,
+  type PayrollRunDetail,
+  type PayrollRunEmployeeDetail,
+} from '../api/payroll'
+
+import { EmployeePayrollHistoryPanel } from './EmployeePayrollHistoryPanel'
+
+import './PayrollRunDetailPanel.css'
+
+interface PayrollRunDetailPanelProps {
+  accessToken: string
+  companyId: string
+  payrollRunId: string
+}
+
+function getErrorMessage(
+  error: unknown,
+): string {
+  if (error instanceof ApiError) {
+    return error.message
+  }
+
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return 'Unable to load payroll run details.'
+}
+
+function formatStatus(
+  value: string,
+): string {
+  return value
+    .split('_')
+    .map(
+      (part) =>
+        part.charAt(0) +
+        part.slice(1).toLowerCase(),
+    )
+    .join(' ')
+}
+
+function formatMoney(
+  value: string,
+): string {
+  const [
+    rawWhole,
+    rawFraction = '00',
+  ] = value.split('.')
+
+  const negative =
+    rawWhole.startsWith('-')
+
+  const whole =
+    negative
+      ? rawWhole.slice(1)
+      : rawWhole
+
+  const formattedWhole =
+    whole.replace(
+      /\B(?=(\d{3})+(?!\d))/g,
+      ',',
+    )
+
+  const fraction =
+    rawFraction
+      .padEnd(2, '0')
+      .slice(0, 2)
+
+  return `₱${negative ? '-' : ''}${formattedWhole}.${fraction}`
+}
+
+function formatDate(
+  value: string,
+): string {
+  return new Intl.DateTimeFormat(
+    'en-PH',
+    {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    },
+  ).format(new Date(value))
+}
+
+function formatDateTime(
+  value: string,
+): string {
+  return new Intl.DateTimeFormat(
+    'en-PH',
+    {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    },
+  ).format(new Date(value))
+}
+
+function employeeStatusClass(
+  employee: PayrollRunEmployeeDetail,
+): string {
+  return `payroll-employee-status-${employee.payrollStatus.toLowerCase()}`
+}
+
+export function PayrollRunDetailPanel({
+  accessToken,
+  companyId,
+  payrollRunId,
+}: PayrollRunDetailPanelProps) {
+  const [
+    detail,
+    setDetail,
+  ] =
+    useState<PayrollRunDetail | null>(null)
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(false)
+
+  const [
+    error,
+    setError,
+  ] =
+    useState<string | null>(null)
+
+  const [
+    selectedHistoryEmployee,
+    setSelectedHistoryEmployee,
+  ] = useState<{
+    id: string
+    name: string
+  } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    setSelectedHistoryEmployee(null)
+
+    if (
+      !companyId ||
+      !payrollRunId
+    ) {
+      setDetail(null)
+      setError(null)
+      setLoading(false)
+
+      return () => {
+        cancelled = true
+      }
+    }
+
+    async function loadDetail() {
+      setLoading(true)
+      setError(null)
+
+      try {
+        const response =
+          await getPayrollRunDetail(
+            accessToken,
+            companyId,
+            payrollRunId,
+          )
+
+        if (cancelled) {
+          return
+        }
+
+        setDetail(response)
+      } catch (loadError: unknown) {
+        if (cancelled) {
+          return
+        }
+
+        setDetail(null)
+
+        setError(
+          getErrorMessage(loadError),
+        )
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+
+    void loadDetail()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    accessToken,
+    companyId,
+    payrollRunId,
+  ])
+
+  if (loading) {
+    return (
+      <section className="attendance-card payroll-detail-card">
+        <div className="empty-state">
+          Loading payroll run details...
+        </div>
+      </section>
+    )
+  }
+
+  if (error) {
+    return (
+      <section className="attendance-card payroll-detail-card">
+        <div
+          className="form-feedback form-feedback-error payroll-detail-error"
+          role="alert"
+        >
+          {error}
+        </div>
+      </section>
+    )
+  }
+
+  if (!detail) {
+    return (
+      <section className="attendance-card payroll-detail-card">
+        <div className="empty-state">
+          Select a payroll run to review
+          its details.
+        </div>
+      </section>
+    )
+  }
+
+  const generatorName = [
+    detail.generatedBy.firstName,
+    detail.generatedBy.lastName,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  return (
+    <section className="attendance-card payroll-detail-card">
+      <div className="card-header payroll-detail-header">
+        <div>
+          <p className="eyebrow">
+            Selected Payroll Run
+          </p>
+
+          <h2>
+            Payroll Version {detail.version}
+          </h2>
+
+          <p>
+            {formatDate(
+              detail.cutoff.startDate,
+            )}{' '}
+            –{' '}
+            {formatDate(
+              detail.cutoff.endDate,
+            )}
+            {' · '}
+            Pay Date{' '}
+            {formatDate(
+              detail.cutoff.payDate,
+            )}
+          </p>
+
+          <p>
+            Generated by{' '}
+            {generatorName ||
+              detail.generatedBy.username}
+            {' · '}
+            {formatDateTime(
+              detail.generatedAt,
+            )}
+          </p>
+        </div>
+
+        <span
+          className={`status-badge payroll-run-status-${detail.status.toLowerCase()}`}
+        >
+          {formatStatus(
+            detail.status,
+          )}
+        </span>
+      </div>
+
+      <div className="payroll-summary-grid">
+        <div className="payroll-summary-card">
+          <span>
+            Total Gross
+          </span>
+
+          <strong>
+            {formatMoney(
+              detail.totalGross,
+            )}
+          </strong>
+        </div>
+
+        <div className="payroll-summary-card">
+          <span>
+            Total Net
+          </span>
+
+          <strong>
+            {formatMoney(
+              detail.totalNet,
+            )}
+          </strong>
+        </div>
+
+        <div className="payroll-summary-card">
+          <span>
+            Cash Payout
+          </span>
+
+          <strong>
+            {formatMoney(
+              detail.cashPayoutTotal,
+            )}
+          </strong>
+        </div>
+
+        <div className="payroll-summary-card">
+          <span>
+            ATM Payout
+          </span>
+
+          <strong>
+            {formatMoney(
+              detail.atmPayoutTotal,
+            )}
+          </strong>
+        </div>
+
+        <div className="payroll-summary-card">
+          <span>
+            Active Hold
+          </span>
+
+          <strong>
+            {formatMoney(
+              detail.activeHoldTotal,
+            )}
+          </strong>
+        </div>
+
+        <div className="payroll-summary-card">
+          <span>
+            Employees
+          </span>
+
+          <strong>
+            {
+              detail.statusBreakdown
+                .totalEmployees
+            }
+          </strong>
+        </div>
+      </div>
+
+      <div className="payroll-status-breakdown">
+        <div>
+          <span>
+            Active
+          </span>
+
+          <strong>
+            {
+              detail.statusBreakdown
+                .active
+            }
+          </strong>
+        </div>
+
+        <div>
+          <span>
+            Active Hold
+          </span>
+
+          <strong>
+            {
+              detail.statusBreakdown
+                .activeHold
+            }
+          </strong>
+        </div>
+
+        <div>
+          <span>
+            Resigned
+          </span>
+
+          <strong>
+            {
+              detail.statusBreakdown
+                .resigned
+            }
+          </strong>
+        </div>
+      </div>
+
+      <div className="payroll-employee-section">
+        <div className="payroll-employee-section-header">
+          <div>
+            <h3>
+              Employee Payroll Results
+            </h3>
+
+            <p>
+              Frozen results for this exact
+              payroll version.
+            </p>
+          </div>
+
+          <span className="record-count">
+            {detail.employees.length}{' '}
+            {detail.employees.length === 1
+              ? 'employee'
+              : 'employees'}
+          </span>
+        </div>
+
+        <div className="payroll-employee-list">
+          {detail.employees.map(
+            (employee) => (
+              <div
+                key={employee.id}
+                className="payroll-employee-row"
+              >
+                <div className="payroll-employee-identity">
+                  <div>
+                    <strong>
+                      {employee.employeeName}
+                    </strong>
+
+                    <span>
+                      {
+                        employee.employeeNumber
+                      }
+
+                      {employee.position
+                        ? ` · ${employee.position}`
+                        : ''}
+
+                      {employee.department
+                        ? ` · ${employee.department}`
+                        : ''}
+                    </span>
+                  </div>
+
+                  <div className="payroll-employee-actions">
+                    <span
+                      className={`status-badge ${employeeStatusClass(
+                        employee,
+                      )}`}
+                    >
+                      {formatStatus(
+                        employee.payrollStatus,
+                      )}
+                    </span>
+
+                    <button
+                      type="button"
+                      className="secondary-button payroll-history-button"
+                      onClick={() =>
+                        setSelectedHistoryEmployee({
+                          id:
+                            employee.employeeId,
+
+                          name:
+                            employee.employeeName,
+                        })
+                      }
+                    >
+                      View History
+                    </button>
+                  </div>
+                </div>
+
+                <div className="payroll-employee-values">
+                  <span>
+                    Gross
+
+                    <strong>
+                      {formatMoney(
+                        employee.grossPay,
+                      )}
+                    </strong>
+                  </span>
+
+                  <span>
+                    Deductions
+
+                    <strong>
+                      {formatMoney(
+                        employee.totalDeductions,
+                      )}
+                    </strong>
+                  </span>
+
+                  <span>
+                    Net
+
+                    <strong>
+                      {formatMoney(
+                        employee.netPay,
+                      )}
+                    </strong>
+                  </span>
+
+                  <span>
+                    Payout
+
+                    <strong>
+                      {employee.payoutMethod}
+                    </strong>
+                  </span>
+                </div>
+
+                {(employee.heldAmount !==
+                  '0.00' ||
+                  employee.isLastPay) && (
+                  <div className="payroll-employee-special">
+                    {employee.heldAmount !==
+                      '0.00' && (
+                      <span>
+                        Held:{' '}
+                        <strong>
+                          {formatMoney(
+                            employee.heldAmount,
+                          )}
+                        </strong>
+                      </span>
+                    )}
+
+                    {employee.isLastPay && (
+                      <span>
+                        Last Pay:{' '}
+                        <strong>
+                          {formatMoney(
+                            employee.lastPayAmount,
+                          )}
+                        </strong>
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ),
+          )}
+
+          {detail.employees.length ===
+            0 && (
+            <div className="empty-state">
+              This payroll run contains no
+              employee results.
+            </div>
+          )}
+        </div>
+
+        {selectedHistoryEmployee && (
+          <EmployeePayrollHistoryPanel
+            accessToken={accessToken}
+            companyId={companyId}
+            employeeId={
+              selectedHistoryEmployee.id
+            }
+            employeeName={
+              selectedHistoryEmployee.name
+            }
+            onClose={() =>
+              setSelectedHistoryEmployee(
+                null,
+              )
+            }
+          />
+        )}
+      </div>
+    </section>
+  )
+}

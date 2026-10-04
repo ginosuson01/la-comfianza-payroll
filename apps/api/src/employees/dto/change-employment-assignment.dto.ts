@@ -1,6 +1,8 @@
 import { Transform } from 'class-transformer';
+import { EmployeeType } from '@payroll/database';
 import {
   IsDateString,
+  IsEnum,
   IsOptional,
   IsString,
   IsUUID,
@@ -24,6 +26,9 @@ function trimOptionalNullableString({ value }: { value: unknown }): unknown {
 export class ChangeEmploymentAssignmentDto {
   @IsUUID()
   companyId!: string;
+
+  @IsEnum(EmployeeType)
+  employeeType!: EmployeeType;
 
   @IsOptional()
   @IsUUID()

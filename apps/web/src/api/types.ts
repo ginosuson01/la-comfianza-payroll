@@ -29,6 +29,10 @@ export interface Pagination {
   totalPages: number
 }
 
+export type CompanyStatus =
+  | 'ACTIVE'
+  | 'INACTIVE'
+
 export interface CompanySummary {
   id: string
   code: string
@@ -36,8 +40,24 @@ export interface CompanySummary {
 }
 
 export interface CompanyListItem extends CompanySummary {
-  status: string
+  addressLine1: string | null
+  addressLine2: string | null
+  barangay: string | null
+  city: string | null
+  province: string | null
+  postalCode: string | null
+  country: string
+
   formattedAddress: string
+
+  contactName: string | null
+  contactEmail: string | null
+  contactPhone: string | null
+
+  status: CompanyStatus
+
+  createdAt: string
+  updatedAt: string
 }
 
 export interface CompanyListResponse {

@@ -7,6 +7,8 @@ import { EmployeeAlphaListPdfService } from './employee-alpha-list-pdf.service';
 import { EmployeeAlphaListService } from './employee-alpha-list.service';
 import { EmployeeCompensationService } from './employee-compensation.service';
 import { EmployeeLeaveCreditService } from './employee-leave-credit.service';
+import { EmployeeLeaveEntitlementCycleService } from './employee-leave-entitlement-cycle.service';
+import { EmployeeLeaveEntitlementService } from './employee-leave-entitlement.service';
 import { EmployeePayrollProfileService } from './employee-payroll-profile.service';
 import { EmployeeRecurringPayrollService } from './employee-recurring-payroll.service';
 import { EmployeeStatusService } from './employee-status.service';
@@ -25,6 +27,8 @@ import { EmployeesService } from './employees.service';
     EmployeeStatusService,
     EmployeePayrollProfileService,
     EmployeeLeaveCreditService,
+    EmployeeLeaveEntitlementCycleService,
+    EmployeeLeaveEntitlementService,
     EmployeeAlphaListService,
     EmployeeAlphaListCsvService,
     EmployeeAlphaListPdfService,
@@ -37,6 +41,8 @@ import { EmployeesService } from './employees.service';
     EmployeeStatusService,
     EmployeePayrollProfileService,
     EmployeeLeaveCreditService,
+    EmployeeLeaveEntitlementCycleService,
+    EmployeeLeaveEntitlementService,
     EmployeeAlphaListService,
     EmployeeAlphaListCsvService,
     EmployeeAlphaListPdfService,

@@ -1,0 +1,170 @@
+.payroll-lifecycle-card {
+  margin-bottom: 20px;
+  border: 1px solid #e4e7ec;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+}
+
+.payroll-lifecycle-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #eaecf0;
+  padding: 18px 20px;
+}
+
+.payroll-lifecycle-heading h2 {
+  margin: 0;
+}
+
+.payroll-lifecycle-heading p:not(.eyebrow) {
+  margin: 5px 0 0;
+  color: #667085;
+  font-size: 12px;
+}
+
+.payroll-lifecycle-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+}
+
+.payroll-reopen-body {
+  align-items: flex-end;
+}
+
+.payroll-lifecycle-description {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.payroll-lifecycle-description strong {
+  color: #172033;
+  font-size: 13px;
+}
+
+.payroll-lifecycle-description span {
+  max-width: 620px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.payroll-reopen-reason {
+  min-width: min(420px, 100%);
+  flex: 1;
+}
+
+.payroll-lifecycle-actions {
+  flex: none;
+}
+
+.payroll-lifecycle-feedback {
+  margin: 0 20px 18px;
+}
+
+.payroll-cutoff-status-open {
+  background: #f2f4f7;
+  color: #475467;
+}
+
+.payroll-cutoff-status-locked {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.payroll-cutoff-status-reopened {
+  background: #fffaeb;
+  color: #b54708;
+}
+
+@media (max-width: 900px) {
+  .payroll-lifecycle-body,
+  .payroll-reopen-body {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .payroll-reopen-reason {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .payroll-lifecycle-actions {
+    display: flex;
+  }
+
+  .payroll-lifecycle-actions button,
+  .payroll-lifecycle-body > button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .payroll-lifecycle-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+
+.payroll-readiness-panel {
+  margin: 0 20px 18px;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.payroll-readiness-ready {
+  border-color: #abefc6;
+  background: #ecfdf3;
+}
+
+.payroll-readiness-blocked {
+  border-color: #fecdca;
+  background: #fef3f2;
+}
+
+.payroll-readiness-summary {
+  display: grid;
+  gap: 4px;
+}
+
+.payroll-readiness-summary strong {
+  color: #172033;
+  font-size: 13px;
+}
+
+.payroll-readiness-summary span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.payroll-readiness-issues {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.payroll-readiness-issue {
+  display: grid;
+  gap: 3px;
+  border-top: 1px solid rgb(217 45 32 / 14%);
+  padding-top: 8px;
+}
+
+.payroll-readiness-issue strong {
+  color: #912018;
+  font-size: 12px;
+}
+
+.payroll-readiness-issue span {
+  color: #b42318;
+  font-size: 12px;
+  line-height: 1.45;
+}

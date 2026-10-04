@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   HolidayType,
+  LeaveBalanceKind,
   LeaveTransactionType,
   LeaveUnit,
   OvertimeType,
@@ -8,6 +9,7 @@ import {
 } from '@payroll/database';
 
 import { PrismaService } from '../database/prisma.service';
+import { resolveAnnualLeaveBalanceKind } from '../employees/employee-annual-leave-allocation';
 import { DTR_LEAVE_TRANSACTION_REFERENCE_TYPE } from './dtr-leave.constants';
 import { DtrPayrollConfigService } from './dtr-payroll-config.service';
 import type { OvertimeEntryInputDto } from './dto/overtime-entry-input.dto';
@@ -302,11 +304,53 @@ export class DtrEntryValidationService {
       );
     }
 
+    const calendarYear = input.workDate.getUTCFullYear();
+
+    const yearStart = new Date(Date.UTC(calendarYear, 0, 1));
+    const nextYearStart = new Date(Date.UTC(calendarYear + 1, 0, 1));
+
+    const entitlementCycle =
+      await this.prisma.employeeLeaveEntitlementCycle.findUnique({
+        where: {
+          employeeId_calendarYear: {
+            employeeId: input.employeeId,
+            calendarYear,
+          },
+        },
+
+        select: {
+          id: true,
+          employeeType: true,
+          initializationReviewRequired: true,
+        },
+      });
+
+    if (!entitlementCycle) {
+      throw new BadRequestException(
+        `Employee does not have an initialized ${calendarYear} leave entitlement.`,
+      );
+    }
+
+    if (entitlementCycle.initializationReviewRequired) {
+      throw new BadRequestException(
+        `${calendarYear} leave balances require Payroll Manager review before use.`,
+      );
+    }
+
+    const balanceKind = resolveAnnualLeaveBalanceKind(
+      entitlementCycle.employeeType,
+      leaveType.code,
+    );
+
+    if (!balanceKind) {
+      return;
+    }
+
     const leaveAccount = await this.prisma.employeeLeaveAccount.findUnique({
       where: {
-        employeeId_leaveTypeId: {
-          employeeId: input.employeeId,
-          leaveTypeId: leaveType.id,
+        entitlementCycleId_balanceKind: {
+          entitlementCycleId: entitlementCycle.id,
+          balanceKind,
         },
       },
 
@@ -316,10 +360,40 @@ export class DtrEntryValidationService {
       },
     });
 
+    let trackedLeaveTypeIds = [leaveType.id];
+
+    if (balanceKind === LeaveBalanceKind.SHARED_VL_SL_POOL) {
+      const sharedLeaveTypes = await this.prisma.leaveType.findMany({
+        where: {
+          companyId: input.companyId,
+
+          code: {
+            in: ['VL', 'SL'],
+          },
+        },
+
+        select: {
+          id: true,
+        },
+      });
+
+      trackedLeaveTypeIds = Array.from(
+        new Set([leaveType.id, ...sharedLeaveTypes.map((item) => item.id)]),
+      );
+    }
+
     const existingEntries = await this.prisma.dtrEntry.findMany({
       where: {
         dtrId: input.dtrId,
-        leaveTypeId: leaveType.id,
+
+        leaveTypeId: {
+          in: trackedLeaveTypeIds,
+        },
+
+        workDate: {
+          gte: yearStart,
+          lt: nextYearStart,
+        },
 
         leaveMinutes: {
           gt: 0,

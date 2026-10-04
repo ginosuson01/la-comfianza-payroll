@@ -4,6 +4,11 @@ import { getAttendanceReferenceData } from './api/attendance-reference'
 import { listActiveCompanies } from './api/companies'
 import { ApiError } from './api/client'
 import {
+  listCutoffEmployees,
+  type CutoffEmployeeView,
+} from './api/cutoff-employees'
+import {
+  createDtr,
   createDtrEntriesBulk,
   deleteDtrEntry,
   listDtrs,
@@ -24,8 +29,17 @@ import type {
 import { useAuth } from './auth/use-auth'
 import { MultiWorkDateSelector } from './attendance/MultiWorkDateSelector'
 import { SelectedDtrDetail } from './attendance/SelectedDtrDetail'
+import { CompanyManagementWorkspace } from './companies/CompanyManagementWorkspace'
+import { EmployeeManagementWorkspace } from './employees/EmployeeManagementWorkspace'
+import { PayrollWorkspace } from './payroll/PayrollWorkspace'
 
 import './App.css'
+
+type AppPage =
+  | 'companies'
+  | 'employees'
+  | 'attendance'
+  | 'payroll'
 
 type AttendanceDraft = {
   workDate: string
@@ -175,6 +189,9 @@ function getAllowedOvertimeTypes(
 function App() {
   const { accessToken } = useAuth()
 
+  const [activePage, setActivePage] =
+    useState<AppPage>('attendance')
+
   const [companies, setCompanies] = useState<CompanyListItem[]>([])
   const [company, setCompany] = useState('')
   const [companiesLoading, setCompaniesLoading] = useState(true)
@@ -186,9 +203,29 @@ function App() {
   const [cutoffError, setCutoffError] = useState<string | null>(null)
 
   const [dtrs, setDtrs] = useState<DtrListItem[]>([])
-  const [dtrTotal, setDtrTotal] = useState(0)
+  const [, setDtrTotal] = useState(0)
   const [dtrsLoading, setDtrsLoading] = useState(false)
-  const [dtrError, setDtrError] = useState<string | null>(null)
+  const [, setDtrError] = useState<string | null>(null)
+
+  const [
+    cutoffEmployees,
+    setCutoffEmployees,
+  ] = useState<CutoffEmployeeView[]>([])
+
+  const [
+    cutoffEmployeesLoading,
+    setCutoffEmployeesLoading,
+  ] = useState(false)
+
+  const [
+    cutoffEmployeesError,
+    setCutoffEmployeesError,
+  ] = useState<string | null>(null)
+
+  const [
+    selectedEmploymentRecordId,
+    setSelectedEmploymentRecordId,
+  ] = useState('')
 
   const [leaveTypes, setLeaveTypes] =
     useState<AttendanceLeaveTypeReference[]>([])
@@ -238,6 +275,31 @@ function App() {
     useState<string | null>(null)
 
   const [dtrRefreshKey, setDtrRefreshKey] = useState(0)
+
+  const [dtrCreating, setDtrCreating] = useState(false)
+  const [dtrCreateError, setDtrCreateError] =
+    useState<string | null>(null)
+
+  useEffect(() => {
+    if (activePage !== 'attendance') {
+      setSelectedEmploymentRecordId('')
+      setSelectedDtrId('')
+
+      setEditingEntryId(null)
+      setEditingDtrId(null)
+
+      setSelectedWorkDates([])
+      setRecordedEntries([])
+
+      setEntryMessage(null)
+      setEntryError(null)
+
+      setReviewMessage(null)
+      setReviewError(null)
+
+      setDtrCreateError(null)
+    }
+  }, [activePage])
 
   useEffect(() => {
     let cancelled = false
@@ -303,6 +365,12 @@ function App() {
       }
     }
 
+    if (activePage !== 'attendance') {
+      return () => {
+        cancelled = true
+      }
+    }
+
     async function loadCutoffs() {
       setCutoffsLoading(true)
       setCutoffError(null)
@@ -351,7 +419,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [accessToken, company])
+  }, [accessToken, company, activePage])
 
   useEffect(() => {
     let cancelled = false
@@ -420,6 +488,108 @@ function App() {
     let cancelled = false
 
     if (!company || !cutoff) {
+      setCutoffEmployees([])
+      setSelectedEmploymentRecordId('')
+      setCutoffEmployeesError(null)
+      setCutoffEmployeesLoading(false)
+
+      return () => {
+        cancelled = true
+      }
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      async function loadEligibleCutoffEmployees() {
+        setCutoffEmployeesLoading(true)
+        setCutoffEmployeesError(null)
+
+        try {
+          const normalizedSearch =
+            search.trim()
+
+          const response =
+            await listCutoffEmployees(
+              accessToken,
+              {
+                companyId: company,
+                payrollCutoffId: cutoff,
+                search:
+                  normalizedSearch.length > 0
+                    ? normalizedSearch
+                    : undefined,
+              },
+            )
+
+          if (cancelled) {
+            return
+          }
+
+          const filteredEmployees =
+            status === 'ALL'
+              ? response
+              : response.filter(
+                  (employee) =>
+                    employee.dtr?.status ===
+                    status,
+                )
+
+          setCutoffEmployees(
+            filteredEmployees,
+          )
+
+          setSelectedEmploymentRecordId(
+            (currentEmploymentRecordId) => {
+              if (
+                currentEmploymentRecordId &&
+                filteredEmployees.some(
+                  (employee) =>
+                    employee.employmentRecordId ===
+                    currentEmploymentRecordId,
+                )
+              ) {
+                return currentEmploymentRecordId
+              }
+
+              return ''
+            },
+          )
+        } catch (error: unknown) {
+          if (cancelled) {
+            return
+          }
+
+          setCutoffEmployees([])
+          setSelectedEmploymentRecordId('')
+          setCutoffEmployeesError(
+            getErrorMessage(error),
+          )
+        } finally {
+          if (!cancelled) {
+            setCutoffEmployeesLoading(false)
+          }
+        }
+      }
+
+      void loadEligibleCutoffEmployees()
+    }, 300)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [
+    accessToken,
+    company,
+    cutoff,
+    search,
+    status,
+    dtrRefreshKey,
+  ])
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (!company || !cutoff) {
       setDtrs([])
       setDtrTotal(0)
       setSelectedDtrId('')
@@ -468,7 +638,7 @@ function App() {
               return currentDtrId
             }
 
-            return response.items[0]?.id ?? ''
+            return ''
           })
         } catch (error: unknown) {
           if (cancelled) {
@@ -502,8 +672,46 @@ function App() {
     dtrRefreshKey,
   ])
 
+  const selectedCutoffEmployee =
+    cutoffEmployees.find(
+      (employee) =>
+        employee.employmentRecordId ===
+        selectedEmploymentRecordId,
+    ) ?? null
+
+  const selectedPayrollCutoff =
+    cutoffs.find(
+      (payrollCutoff) =>
+        payrollCutoff.id === cutoff,
+    ) ?? null
+
+  const selectedCutoffEmployeeName =
+    selectedCutoffEmployee
+      ? [
+          selectedCutoffEmployee.firstName,
+          selectedCutoffEmployee.middleName,
+          selectedCutoffEmployee.lastName,
+          selectedCutoffEmployee.suffix,
+        ]
+          .filter(Boolean)
+          .join(' ')
+      : ''
+
   const selectedDtr =
-    dtrs.find((dtr) => dtr.id === selectedDtrId) ?? dtrs[0]
+    selectedDtrId
+      ? dtrs.find(
+          (dtr) =>
+            dtr.id === selectedDtrId,
+        ) ?? null
+      : null
+
+  useEffect(() => {
+    setSelectedDtrId(
+      selectedCutoffEmployee?.dtr?.id ?? '',
+    )
+
+    setDtrCreateError(null)
+  }, [selectedCutoffEmployee])
 
   const cutoffIsLocked =
     selectedDtr?.payrollCutoff.status === 'LOCKED'
@@ -917,6 +1125,10 @@ function App() {
     setDtrTotal(0)
     setSelectedDtrId('')
 
+    setCutoffEmployees([])
+    setSelectedEmploymentRecordId('')
+    setCutoffEmployeesError(null)
+
     setCutoffError(null)
     setDtrError(null)
   }
@@ -927,7 +1139,76 @@ function App() {
     setDtrs([])
     setDtrTotal(0)
     setSelectedDtrId('')
+
+    setCutoffEmployees([])
+    setSelectedEmploymentRecordId('')
+    setCutoffEmployeesError(null)
+
     setDtrError(null)
+  }
+
+  async function handleCreateDtr() {
+    if (
+      dtrCreating ||
+      !company ||
+      !cutoff ||
+      !selectedCutoffEmployee ||
+      selectedCutoffEmployee.dtr
+    ) {
+      return
+    }
+
+    setDtrCreating(true)
+    setDtrCreateError(null)
+
+    try {
+      const createdDtr =
+        await createDtr(
+          accessToken,
+          {
+            companyId: company,
+            employeeId:
+              selectedCutoffEmployee.employeeId,
+            payrollCutoffId: cutoff,
+          },
+        )
+
+      setSelectedDtrId(
+        createdDtr.id,
+      )
+
+      setDtrRefreshKey(
+        (current) =>
+          current + 1,
+      )
+    } catch (
+      error: unknown
+    ) {
+      setDtrCreateError(
+        getErrorMessage(error),
+      )
+    } finally {
+      setDtrCreating(false)
+    }
+  }
+
+  function handleCloseSelectedDtr() {
+    setSelectedEmploymentRecordId('')
+    setSelectedDtrId('')
+
+    setEditingEntryId(null)
+    setEditingDtrId(null)
+
+    setSelectedWorkDates([])
+    setRecordedEntries([])
+
+    setEntryMessage(null)
+    setEntryError(null)
+
+    setReviewMessage(null)
+    setReviewError(null)
+
+    setDtrCreateError(null)
   }
 
   function toNonNegativeInteger(
@@ -1353,17 +1634,81 @@ function App() {
           aria-label="Main navigation"
         >
           <button type="button">Dashboard</button>
-          <button type="button">Companies</button>
-          <button type="button">Employees</button>
+          <button
+            type="button"
+            className={
+              activePage === 'companies'
+                ? 'active'
+                : undefined
+            }
+            aria-current={
+              activePage === 'companies'
+                ? 'page'
+                : undefined
+            }
+            onClick={() =>
+              setActivePage('companies')
+            }
+          >
+            Companies
+          </button>
 
           <button
             type="button"
-            className="active"
+            className={
+              activePage === 'employees'
+                ? 'active'
+                : undefined
+            }
+            aria-current={
+              activePage === 'employees'
+                ? 'page'
+                : undefined
+            }
+            onClick={() =>
+              setActivePage('employees')
+            }
+          >
+            Employees
+          </button>
+
+          <button
+            type="button"
+            className={
+              activePage === 'attendance'
+                ? 'active'
+                : undefined
+            }
+            aria-current={
+              activePage === 'attendance'
+                ? 'page'
+                : undefined
+            }
+            onClick={() =>
+              setActivePage('attendance')
+            }
           >
             Attendance / DTR
           </button>
 
-          <button type="button">Payroll</button>
+          <button
+            type="button"
+            className={
+              activePage === 'payroll'
+                ? 'active'
+                : undefined
+            }
+            aria-current={
+              activePage === 'payroll'
+                ? 'page'
+                : undefined
+            }
+            onClick={() =>
+              setActivePage('payroll')
+            }
+          >
+            Payroll
+          </button>
           <button type="button">Reports</button>
           <button type="button">Activity Log</button>
         </nav>
@@ -1374,6 +1719,19 @@ function App() {
         </div>
       </aside>
 
+      {activePage === 'companies' ? (
+        <CompanyManagementWorkspace
+          accessToken={accessToken}
+        />
+      ) : activePage === 'employees' ? (
+        <EmployeeManagementWorkspace
+          accessToken={accessToken}
+        />
+      ) : activePage === 'payroll' ? (
+        <PayrollWorkspace
+          accessToken={accessToken}
+        />
+      ) : (
       <main className="main">
         <header className="topbar">
           <div>
@@ -1576,72 +1934,100 @@ function App() {
               </div>
 
               <span className="record-count">
-                {dtrTotal} records
+                {cutoffEmployees.length} records
               </span>
             </div>
 
             <div className="dtr-list">
-              {dtrsLoading && (
+              {cutoffEmployeesLoading && (
                 <div className="empty-state">
-                  Loading employee DTRs...
+                  Loading cutoff employees...
                 </div>
               )}
 
-              {!dtrsLoading &&
-                dtrError && (
+              {!cutoffEmployeesLoading &&
+                cutoffEmployeesError && (
                   <div className="empty-state">
-                    {dtrError}
+                    {cutoffEmployeesError}
                   </div>
                 )}
 
-              {!dtrsLoading &&
-                !dtrError &&
-                dtrs.map((dtr) => {
-                  const employeeName =
-                    formatEmployeeName(dtr.employee)
+              {!cutoffEmployeesLoading &&
+                !cutoffEmployeesError &&
+                cutoffEmployees.map(
+                  (employee) => {
+                    const employeeName = [
+                      employee.firstName,
+                      employee.middleName,
+                      employee.lastName,
+                      employee.suffix,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
 
-                  return (
-                    <button
-                      key={dtr.id}
-                      type="button"
-                      className={`dtr-row ${
-                        selectedDtrId === dtr.id
-                          ? 'selected'
-                          : ''
-                      }`}
-                      onClick={() =>
-                        setSelectedDtrId(dtr.id)
-                      }
-                    >
-                      <div className="employee-avatar">
-                        {dtr.employee.firstName.charAt(0)}
-                      </div>
-
-                      <div className="employee-summary">
-                        <strong>
-                          {employeeName}
-                        </strong>
-
-                        <span>
-                          {dtr.employee.employeeNumber} ·{' '}
-                          {dtr._count.entries} daily entries
-                        </span>
-                      </div>
-
-                      <span
-                        className={`status-badge status-${dtr.status.toLowerCase()}`}
+                    return (
+                      <button
+                        key={
+                          employee.employmentRecordId
+                        }
+                        type="button"
+                        className={`dtr-row ${
+                          selectedEmploymentRecordId ===
+                          employee.employmentRecordId
+                            ? 'selected'
+                            : ''
+                        }`}
+                        onClick={() =>
+                          setSelectedEmploymentRecordId(
+                            employee.employmentRecordId,
+                          )
+                        }
                       >
-                        {formatStatus(dtr.status)}
-                      </span>
-                    </button>
-                  )
-                })}
+                        <div className="employee-avatar">
+                          {employee.firstName.charAt(
+                            0,
+                          )}
+                        </div>
 
-              {!dtrsLoading &&
-                !dtrError &&
-                dtrs.length === 0 && (
+                        <div className="employee-summary">
+                          <strong>
+                            {employeeName}
+                          </strong>
+
+                          <span>
+                            {
+                              employee.employeeNumber
+                            }{' '}
+                            ·{' '}
+                            {employee.dtr
+                              ? `${employee.dtr.entryCount} daily entries`
+                              : 'No DTR Yet'}
+                          </span>
+                        </div>
+
+                        {employee.dtr ? (
+                          <span
+                            className={`status-badge status-${employee.dtr.status.toLowerCase()}`}
+                          >
+                            {formatStatus(
+                              employee.dtr.status,
+                            )}
+                          </span>
+                        ) : (
+                          <span className="status-badge">
+                            No DTR Yet
+                          </span>
+                        )}
+                      </button>
+                    )
+                  },
+                )}
+
+              {!cutoffEmployeesLoading &&
+                !cutoffEmployeesError &&
+                cutoffEmployees.length === 0 && (
                   <div className="empty-state">
-                    No DTRs match the selected filters.
+                    No eligible employees match the selected filters.
                   </div>
                 )}
             </div>
@@ -2169,6 +2555,21 @@ function App() {
                   <button
                     type="button"
                     className="secondary-button"
+                    disabled={
+                      entrySaving ||
+                      reviewSaving ||
+                      deletingEntryId !== null
+                    }
+                    onClick={
+                      handleCloseSelectedDtr
+                    }
+                  >
+                    Close DTR
+                  </button>
+
+                  <button
+                    type="button"
+                    className="secondary-button"
                     disabled={isReadOnly}
                     onClick={
                       editingEntryId
@@ -2310,16 +2711,104 @@ function App() {
                   )}
                 </div>
               </>
+            ) : dtrsLoading && selectedDtrId ? (
+              <div className="empty-state">
+                Loading selected DTR...
+              </div>
+            ) : selectedCutoffEmployee &&
+              !selectedCutoffEmployee.dtr ? (
+              <>
+                <div className="card-header attendance-header">
+                  <div>
+                    <p className="eyebrow">
+                      Selected Employee
+                    </p>
+
+                    <h2>
+                      {selectedCutoffEmployeeName}
+                    </h2>
+
+                    <p>
+                      {
+                        selectedCutoffEmployee.employeeNumber
+                      }
+                      {selectedPayrollCutoff
+                        ? ` · ${formatCutoff(
+                            selectedPayrollCutoff,
+                          )}`
+                        : ''}
+                    </p>
+                  </div>
+
+                  <span className="status-badge">
+                    No DTR Yet
+                  </span>
+                </div>
+
+                {selectedPayrollCutoff?.status ===
+                  'LOCKED' && (
+                  <div className="locked-notice">
+                    <strong>
+                      Payroll Cutoff Locked
+                    </strong>
+
+                    <span>
+                      A new DTR cannot be created while this payroll cutoff is locked.
+                    </span>
+                  </div>
+                )}
+
+                <div className="section-title attendance-create-dtr-section">
+                  <div>
+                    <h3>
+                      Create Daily Time Record
+                    </h3>
+
+                    <p>
+                      Create the DTR container for this employee and payroll cutoff before encoding daily attendance entries.
+                    </p>
+                  </div>
+
+                  <div className="attendance-create-dtr-actions">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={
+                        dtrCreating ||
+                        selectedPayrollCutoff?.status ===
+                          'LOCKED'
+                      }
+                      onClick={() =>
+                        void handleCreateDtr()
+                      }
+                    >
+                      {dtrCreating
+                        ? 'Creating...'
+                        : 'Create DTR'}
+                    </button>
+                  </div>
+                </div>
+
+                {dtrCreateError && (
+                  <div
+                    className="form-feedback form-feedback-error"
+                    role="alert"
+                  >
+                    {dtrCreateError}
+                  </div>
+                )}
+              </>
             ) : (
               <div className="empty-state">
                 {dtrsLoading
                   ? 'Loading selected DTR...'
-                  : 'Select a DTR to review attendance.'}
+                  : 'Select an employee DTR to review attendance.'}
               </div>
             )}
           </section>
         </div>
       </main>
+      )}
     </div>
   )
 }

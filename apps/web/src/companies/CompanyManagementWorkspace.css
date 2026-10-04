@@ -1,0 +1,612 @@
+.company-management-filters {
+  display: grid;
+  grid-template-columns:
+    minmax(280px, 1.6fr)
+    minmax(180px, 0.7fr)
+    auto;
+  align-items: end;
+  gap: 14px;
+}
+
+.company-search-field {
+  min-width: 0;
+}
+
+.company-filter-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.company-management-workspace {
+  align-items: start;
+}
+
+.company-management-list {
+  display: grid;
+}
+
+.company-management-row {
+  width: 100%;
+  display: grid;
+  gap: 5px;
+  border: 0;
+  border-bottom: 1px solid #f2f4f7;
+  padding: 15px 16px;
+  background: #ffffff;
+  color: inherit;
+  text-align: left;
+}
+
+.company-management-row:last-child {
+  border-bottom: 0;
+}
+
+.company-management-row:hover {
+  background: #f9fafb;
+}
+
+.company-management-row.selected {
+  background: #f2f4f7;
+  box-shadow: inset 3px 0 0 #344054;
+}
+
+.company-management-row-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.company-management-row-heading strong {
+  color: #172033;
+  font-size: 13px;
+}
+
+.company-code {
+  color: #475467;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.company-address {
+  color: #667085;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.company-status-active {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.company-status-inactive {
+  background: #f2f4f7;
+  color: #667085;
+}
+
+.company-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-top: 1px solid #eaecf0;
+  padding: 14px 16px;
+}
+
+.company-pagination span {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.company-profile-header {
+  align-items: flex-start;
+}
+
+.company-profile-header p:not(.eyebrow) {
+  margin-top: 5px;
+}
+
+.company-profile-section {
+  border-top: 1px solid #eaecf0;
+  padding: 18px 20px;
+}
+
+.company-profile-section-heading {
+  margin-bottom: 12px;
+}
+
+.company-profile-section-heading h3 {
+  margin: 0;
+  color: #172033;
+  font-size: 14px;
+}
+
+.company-profile-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.company-profile-grid > div {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f9fafb;
+}
+
+.company-profile-grid span {
+  color: #667085;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.company-profile-grid strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #344054;
+  font-size: 12px;
+}
+
+.company-profile-wide {
+  grid-column: 1 / -1;
+}
+
+.company-profile-upcoming {
+  border-top: 1px solid #eaecf0;
+  padding: 14px 20px;
+  background: #fffaeb;
+  color: #b54708;
+  font-size: 11px;
+}
+
+@media (max-width: 1100px) {
+  .company-management-filters {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .company-filter-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 600px) {
+  .company-management-filters,
+  .company-profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .company-filter-actions {
+    grid-column: auto;
+  }
+
+  .company-filter-actions {
+    flex-direction: column;
+  }
+
+  .company-filter-actions button {
+    width: 100%;
+  }
+
+  .company-profile-wide {
+    grid-column: auto;
+  }
+
+  .company-management-row-heading {
+    flex-direction: column;
+  }
+}
+
+.company-profile-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.company-form {
+  display: grid;
+}
+
+.company-form-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+}
+
+.company-form-header h2 {
+  margin: 2px 0 0;
+}
+
+.company-form-section {
+  border-top: 1px solid #eaecf0;
+  padding: 18px 20px;
+}
+
+.company-form-section h3 {
+  margin: 0 0 12px;
+  color: #172033;
+  font-size: 14px;
+}
+
+.company-form-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.company-form-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.company-form-grid label > span {
+  color: #344054;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.company-form-grid label > small {
+  color: #667085;
+  font-size: 10px;
+}
+
+.company-form-grid input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.company-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid #eaecf0;
+  padding: 16px 20px;
+}
+
+.form-feedback {
+  margin: 0 20px 16px;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.form-feedback-error {
+  border: 1px solid #fecdca;
+  background: #fef3f2;
+  color: #b42318;
+}
+
+@media (max-width: 700px) {
+  .company-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .company-form-header,
+  .company-profile-header-actions {
+    flex-direction: column;
+  }
+
+  .company-form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .company-form-actions button {
+    width: 100%;
+  }
+}
+
+.company-action-feedback {
+  margin-bottom: 14px;
+  border-radius: 8px;
+  padding: 11px 14px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.company-action-feedback-success {
+  border: 1px solid #abefc6;
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.company-action-feedback-error {
+  border: 1px solid #fecdca;
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.company-danger-button {
+  border: 1px solid #f04438;
+  border-radius: 7px;
+  padding: 8px 12px;
+  background: #ffffff;
+  color: #b42318;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.company-danger-button:hover:not(:disabled) {
+  background: #fef3f2;
+}
+
+.company-danger-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (max-width: 700px) {
+  .company-profile-header-actions button {
+    width: 100%;
+  }
+}
+
+/* Keep the Company Directory title and primary action aligned. */
+.company-directory-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.company-directory-heading > div {
+  min-width: 0;
+}
+
+.company-directory-heading .primary-button {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 700px) {
+  .company-directory-heading {
+    flex-direction: column;
+  }
+
+  .company-directory-heading .primary-button {
+    width: 100%;
+  }
+}
+
+.company-cutoff-help {
+  margin: 12px 0 0;
+  color: #667085;
+  font-size: 11px;
+}
+
+.company-cutoff-period {
+  margin-top: 18px;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  padding: 16px;
+  background: #ffffff;
+}
+
+.company-cutoff-period h4 {
+  margin: 0 0 14px;
+  color: #172033;
+  font-size: 13px;
+}
+
+.company-cutoff-rule-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.company-cutoff-rule {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #eaecf0;
+  border-radius: 7px;
+  padding: 12px;
+  background: #f9fafb;
+}
+
+.company-cutoff-rule > strong {
+  color: #172033;
+  font-size: 11px;
+}
+
+.company-cutoff-rule label {
+  display: grid;
+  gap: 6px;
+}
+
+.company-cutoff-rule label > span {
+  color: #344054;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.company-cutoff-rule input,
+.company-cutoff-rule select,
+.company-form-grid select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.company-cutoff-template-list {
+  display: grid;
+  gap: 12px;
+}
+
+.company-cutoff-template-card {
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  padding: 14px;
+  background: #ffffff;
+}
+
+.company-cutoff-template-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.company-cutoff-template-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.company-cutoff-template-heading span,
+.company-cutoff-template-frequency,
+.company-cutoff-period-summary span,
+.company-cutoff-period-summary div {
+  color: #667085;
+  font-size: 10px;
+}
+
+.company-cutoff-template-heading strong,
+.company-cutoff-period-summary strong {
+  color: #172033;
+  font-size: 12px;
+}
+
+.company-cutoff-template-frequency {
+  margin-top: 6px;
+}
+
+.company-cutoff-period-summary-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.company-cutoff-period-summary {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #eaecf0;
+  border-radius: 7px;
+  padding: 12px;
+  background: #f9fafb;
+}
+
+@media (max-width: 900px) {
+  .company-cutoff-rule-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .company-cutoff-period-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.company-cutoff-generation {
+  margin-top: 14px;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  padding: 14px;
+  background: #f9fafb;
+}
+
+.company-cutoff-generation-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.company-cutoff-generation-heading strong {
+  color: #172033;
+  font-size: 12px;
+}
+
+.company-cutoff-generation-heading span {
+  color: #667085;
+  font-size: 10px;
+}
+
+.company-cutoff-generation-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.company-cutoff-generation-form label {
+  display: grid;
+  flex: 1 1 220px;
+  max-width: 280px;
+  gap: 6px;
+}
+
+.company-cutoff-generation-form label > span {
+  color: #344054;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.company-cutoff-generation-form input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.company-cutoff-generation-feedback {
+  margin: 12px 0 0;
+}
+
+.company-cutoff-generation-results {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.company-cutoff-generation-result {
+  display: grid;
+  grid-template-columns:
+    minmax(120px, 1fr)
+    minmax(190px, 1.4fr)
+    minmax(110px, 0.8fr)
+    minmax(110px, 0.8fr);
+  gap: 12px;
+  border: 1px solid #eaecf0;
+  border-radius: 7px;
+  padding: 10px 12px;
+  background: #ffffff;
+}
+
+.company-cutoff-generation-result > div {
+  display: grid;
+  gap: 3px;
+}
+
+.company-cutoff-generation-result span {
+  color: #667085;
+  font-size: 10px;
+}
+
+.company-cutoff-generation-result strong {
+  color: #172033;
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .company-cutoff-generation-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .company-cutoff-generation-form label {
+    max-width: none;
+  }
+
+  .company-cutoff-generation-form .primary-button {
+    width: 100%;
+  }
+
+  .company-cutoff-generation-result {
+    grid-template-columns: 1fr;
+  }
+}

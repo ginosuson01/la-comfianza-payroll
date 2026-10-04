@@ -1,5 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import {
+  EmployeeType,
+  LeaveBalanceKind,
   LeaveUnit,
   Prisma,
   type Prisma as PrismaTypes,
@@ -27,6 +29,8 @@ describe('EmployeeLeaveCreditService', () => {
 
   const leaveAccountId = '33333333-3333-4333-8333-333333333333';
 
+  const entitlementCycleId = '66666666-6666-4666-8666-666666666666';
+
   const leaveTransactionId = '55555555-5555-4555-8555-555555555555';
 
   const employee = {
@@ -49,8 +53,20 @@ describe('EmployeeLeaveCreditService', () => {
     ],
   };
 
-  it('creates VL type/account and adds leave credit', async () => {
+  it('updates an initialized annual VL account and adds leave credit', async () => {
     const createdAt = new Date('2026-09-15T01:00:00.000Z');
+
+    const entitlementCycleFindUnique = jest.fn().mockResolvedValue({
+      id: entitlementCycleId,
+      employmentRecordId,
+      employeeType: EmployeeType.LACOM_INTERNAL,
+      effectiveFrom: new Date('2026-07-01T00:00:00.000Z'),
+      expiresOn: new Date('2026-12-31T00:00:00.000Z'),
+
+      employmentRecord: {
+        companyId,
+      },
+    });
 
     const leaveTypeUpsert = jest.fn().mockResolvedValue({
       id: leaveTypeId,
@@ -59,9 +75,12 @@ describe('EmployeeLeaveCreditService', () => {
       unit: LeaveUnit.DAY,
     });
 
-    const leaveAccountFindUnique = jest.fn().mockResolvedValue(null);
+    const leaveAccountFindUnique = jest.fn().mockResolvedValue({
+      id: leaveAccountId,
+      currentBalance: new Prisma.Decimal(0),
+    });
 
-    const leaveAccountCreate = jest.fn().mockResolvedValue({
+    const leaveAccountUpdate = jest.fn().mockResolvedValue({
       id: leaveAccountId,
       currentBalance: new Prisma.Decimal(5),
     });
@@ -77,14 +96,17 @@ describe('EmployeeLeaveCreditService', () => {
     });
 
     const transaction = {
+      employeeLeaveEntitlementCycle: {
+        findUnique: entitlementCycleFindUnique,
+      },
+
       leaveType: {
         upsert: leaveTypeUpsert,
       },
 
       employeeLeaveAccount: {
         findUnique: leaveAccountFindUnique,
-        create: leaveAccountCreate,
-        update: jest.fn(),
+        update: leaveAccountUpdate,
       },
 
       leaveTransaction: {
@@ -127,38 +149,49 @@ describe('EmployeeLeaveCreditService', () => {
       actorUserId,
     );
 
-    expect(leaveTypeUpsert).toHaveBeenCalledWith({
+    expect(entitlementCycleFindUnique).toHaveBeenCalledWith({
       where: {
-        companyId_code: {
-          companyId,
-          code: 'VL',
+        employeeId_calendarYear: {
+          employeeId,
+          calendarYear: 2026,
         },
-      },
-
-      create: {
-        companyId,
-        code: 'VL',
-        name: 'Vacation Leave',
-        unit: LeaveUnit.DAY,
-        active: true,
-      },
-
-      update: {
-        active: true,
       },
 
       select: {
         id: true,
-        code: true,
-        name: true,
-        unit: true,
+        employmentRecordId: true,
+        employeeType: true,
+        effectiveFrom: true,
+        expiresOn: true,
+
+        employmentRecord: {
+          select: {
+            companyId: true,
+          },
+        },
       },
     });
 
-    expect(leaveAccountCreate).toHaveBeenCalledWith({
+    expect(leaveAccountFindUnique).toHaveBeenCalledWith({
+      where: {
+        entitlementCycleId_balanceKind: {
+          entitlementCycleId,
+          balanceKind: LeaveBalanceKind.VL,
+        },
+      },
+
+      select: {
+        id: true,
+        currentBalance: true,
+      },
+    });
+
+    expect(leaveAccountUpdate).toHaveBeenCalledWith({
+      where: {
+        id: leaveAccountId,
+      },
+
       data: {
-        employeeId,
-        leaveTypeId,
         currentBalance: new Prisma.Decimal(5),
       },
 
@@ -188,6 +221,10 @@ describe('EmployeeLeaveCreditService', () => {
       metadata: {
         employmentRecordId,
 
+        leaveEntitlementCycleId: entitlementCycleId,
+
+        balanceKind: LeaveBalanceKind.VL,
+
         leaveAccountId,
 
         leaveTransactionId,
@@ -209,14 +246,14 @@ describe('EmployeeLeaveCreditService', () => {
     });
 
     expect(result).toEqual({
+      companyId,
+
       leaveAccountId,
 
       leaveTransactionId,
 
       employeeId,
       employeeNumber: 'EMP-0001',
-
-      companyId,
 
       leaveTypeId,
 
@@ -240,8 +277,44 @@ describe('EmployeeLeaveCreditService', () => {
     });
   });
 
-  it('updates an existing SL account with a negative adjustment', async () => {
+  it('maps a client SL manual adjustment to the shared VL/SL annual balance', async () => {
+    const entitlementCycleFindUnique = jest.fn().mockResolvedValue({
+      id: entitlementCycleId,
+      employmentRecordId,
+      employeeType: EmployeeType.CLIENT_EMPLOYEE,
+      effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+      expiresOn: new Date('2026-12-31T00:00:00.000Z'),
+
+      employmentRecord: {
+        companyId,
+      },
+    });
+
+    const leaveAccountFindUnique = jest.fn().mockResolvedValue({
+      id: leaveAccountId,
+      currentBalance: new Prisma.Decimal(4),
+    });
+
+    const leaveAccountUpdate = jest.fn().mockResolvedValue({
+      id: leaveAccountId,
+      currentBalance: new Prisma.Decimal(3),
+    });
+
+    const leaveTransactionCreate = jest.fn().mockResolvedValue({
+      id: leaveTransactionId,
+
+      effectiveDate: new Date('2026-09-15T00:00:00.000Z'),
+
+      notes: null,
+
+      createdAt: new Date('2026-09-15T01:00:00.000Z'),
+    });
+
     const transaction = {
+      employeeLeaveEntitlementCycle: {
+        findUnique: entitlementCycleFindUnique,
+      },
+
       leaveType: {
         upsert: jest.fn().mockResolvedValue({
           id: leaveTypeId,
@@ -252,19 +325,134 @@ describe('EmployeeLeaveCreditService', () => {
       },
 
       employeeLeaveAccount: {
-        findUnique: jest.fn().mockResolvedValue({
-          id: leaveAccountId,
+        findUnique: leaveAccountFindUnique,
+        update: leaveAccountUpdate,
+      },
 
-          currentBalance: new Prisma.Decimal(5),
+      leaveTransaction: {
+        create: leaveTransactionCreate,
+      },
+    } as unknown as PrismaTypes.TransactionClient;
+
+    const prisma = {
+      employee: {
+        findUnique: jest.fn().mockResolvedValue(employee),
+      },
+
+      $transaction: jest
+        .fn()
+        .mockImplementation(
+          (
+            callback: (
+              transaction: PrismaTypes.TransactionClient,
+            ) => Promise<unknown>,
+          ) => callback(transaction),
+        ),
+    } as unknown as PrismaService;
+
+    const recordSuccessInTransaction = jest.fn().mockResolvedValue(undefined);
+
+    const auditLog = {
+      recordSuccessInTransaction,
+    } as unknown as AuditLogService;
+
+    const service = new EmployeeLeaveCreditService(prisma, auditLog);
+
+    const result = await service.adjustLeaveCredit(
+      employeeId,
+      {
+        leaveCode: 'SL',
+        quantity: -1,
+        effectiveDate: '2026-09-15',
+      },
+      actorUserId,
+    );
+
+    expect(leaveAccountFindUnique).toHaveBeenCalledWith({
+      where: {
+        entitlementCycleId_balanceKind: {
+          entitlementCycleId,
+          balanceKind: LeaveBalanceKind.SHARED_VL_SL_POOL,
+        },
+      },
+
+      select: {
+        id: true,
+        currentBalance: true,
+      },
+    });
+
+    expect(leaveAccountUpdate).toHaveBeenCalledWith({
+      where: {
+        id: leaveAccountId,
+      },
+
+      data: {
+        currentBalance: new Prisma.Decimal(3),
+      },
+
+      select: {
+        id: true,
+        currentBalance: true,
+      },
+    });
+
+    expect(recordSuccessInTransaction).toHaveBeenCalledWith(
+      transaction,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          leaveEntitlementCycleId: entitlementCycleId,
+          balanceKind: LeaveBalanceKind.SHARED_VL_SL_POOL,
+          leaveCode: 'SL',
+        }) as unknown,
+      }),
+    );
+
+    expect(result.leaveCode).toBe('SL');
+    expect(result.previousBalance).toBe('4');
+    expect(result.adjustmentQuantity).toBe('-1');
+    expect(result.currentBalance).toBe('3');
+  });
+
+  it('updates an initialized annual SL account with a negative adjustment', async () => {
+    const leaveAccountFindUnique = jest.fn().mockResolvedValue({
+      id: leaveAccountId,
+
+      currentBalance: new Prisma.Decimal(5),
+    });
+
+    const transaction = {
+      employeeLeaveEntitlementCycle: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: entitlementCycleId,
+          employmentRecordId,
+          employeeType: EmployeeType.LACOM_INTERNAL,
+          effectiveFrom: new Date('2026-07-01T00:00:00.000Z'),
+          expiresOn: new Date('2026-12-31T00:00:00.000Z'),
+
+          employmentRecord: {
+            companyId,
+          },
         }),
+      },
+
+      leaveType: {
+        upsert: jest.fn().mockResolvedValue({
+          id: leaveTypeId,
+          code: 'SL',
+          name: 'Sick Leave',
+          unit: LeaveUnit.DAY,
+        }),
+      },
+
+      employeeLeaveAccount: {
+        findUnique: leaveAccountFindUnique,
 
         update: jest.fn().mockResolvedValue({
           id: leaveAccountId,
 
           currentBalance: new Prisma.Decimal(3.5),
         }),
-
-        create: jest.fn(),
       },
 
       leaveTransaction: {
@@ -312,6 +500,20 @@ describe('EmployeeLeaveCreditService', () => {
       actorUserId,
     );
 
+    expect(leaveAccountFindUnique).toHaveBeenCalledWith({
+      where: {
+        entitlementCycleId_balanceKind: {
+          entitlementCycleId,
+          balanceKind: LeaveBalanceKind.SL,
+        },
+      },
+
+      select: {
+        id: true,
+        currentBalance: true,
+      },
+    });
+
     expect(result.previousBalance).toBe('5');
 
     expect(result.adjustmentQuantity).toBe('-1.5');
@@ -321,7 +523,7 @@ describe('EmployeeLeaveCreditService', () => {
     expect(result.leaveName).toBe('Sick Leave');
   });
 
-  it('rejects an adjustment that would make the balance negative', async () => {
+  it('rejects an adjustment that would make the annual balance negative', async () => {
     const executeTransaction = jest
       .fn()
       .mockImplementation(
@@ -331,6 +533,20 @@ describe('EmployeeLeaveCreditService', () => {
           ) => Promise<unknown>,
         ) => {
           const transaction = {
+            employeeLeaveEntitlementCycle: {
+              findUnique: jest.fn().mockResolvedValue({
+                id: entitlementCycleId,
+                employmentRecordId,
+                employeeType: EmployeeType.LACOM_INTERNAL,
+                effectiveFrom: new Date('2026-07-01T00:00:00.000Z'),
+                expiresOn: new Date('2026-12-31T00:00:00.000Z'),
+
+                employmentRecord: {
+                  companyId,
+                },
+              }),
+            },
+
             leaveType: {
               upsert: jest.fn().mockResolvedValue({
                 id: leaveTypeId,
@@ -415,8 +631,34 @@ describe('EmployeeLeaveCreditService', () => {
     expect(executeTransaction).not.toHaveBeenCalled();
   });
 
-  it('rejects an effective date before current employment start', async () => {
-    const executeTransaction = jest.fn();
+  it('rejects an effective date before the annual entitlement becomes effective', async () => {
+    const executeTransaction = jest
+      .fn()
+      .mockImplementation(
+        async (
+          callback: (
+            transaction: PrismaTypes.TransactionClient,
+          ) => Promise<unknown>,
+        ) => {
+          const transaction = {
+            employeeLeaveEntitlementCycle: {
+              findUnique: jest.fn().mockResolvedValue({
+                id: entitlementCycleId,
+                employmentRecordId,
+                employeeType: EmployeeType.LACOM_INTERNAL,
+                effectiveFrom: new Date('2026-07-01T00:00:00.000Z'),
+                expiresOn: new Date('2026-12-31T00:00:00.000Z'),
+
+                employmentRecord: {
+                  companyId,
+                },
+              }),
+            },
+          } as unknown as PrismaTypes.TransactionClient;
+
+          return callback(transaction);
+        },
+      );
 
     const prisma = {
       employee: {
@@ -438,12 +680,12 @@ describe('EmployeeLeaveCreditService', () => {
         {
           leaveCode: 'VL',
           quantity: 5,
-          effectiveDate: '2025-12-31',
+          effectiveDate: '2026-06-30',
         },
         actorUserId,
       ),
-    ).rejects.toBeInstanceOf(BadRequestException);
-
-    expect(executeTransaction).not.toHaveBeenCalled();
+    ).rejects.toThrow(
+      'Leave credit effective date is outside the 2026 entitlement period.',
+    );
   });
 });

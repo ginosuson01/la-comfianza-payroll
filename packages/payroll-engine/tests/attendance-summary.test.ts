@@ -52,6 +52,8 @@ test('returns a zero attendance summary for no entries', () => {
     leaveBreakdown: [],
     overtimeBreakdown: [],
     holidayBreakdown: [],
+
+    premiumWorkBreakdown: [],
   });
 });
 

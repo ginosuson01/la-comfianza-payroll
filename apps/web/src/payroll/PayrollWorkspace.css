@@ -1,0 +1,123 @@
+.payroll-filters {
+  grid-template-columns:
+    1.2fr
+    1.2fr
+    1fr;
+}
+
+.payroll-run-list {
+  display: grid;
+}
+
+.payroll-run-row {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+  border: 0;
+  border-bottom: 1px solid #f2f4f7;
+  padding: 15px 16px;
+  background: #ffffff;
+  color: inherit;
+  text-align: left;
+}
+
+.payroll-run-row:last-child {
+  border-bottom: 0;
+}
+
+.payroll-run-row:hover {
+  background: #f9fafb;
+}
+
+.payroll-run-row.selected {
+  background: #f2f4f7;
+  box-shadow: inset 3px 0 0 #344054;
+}
+
+.payroll-run-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.payroll-run-row-header strong {
+  font-size: 13px;
+}
+
+.payroll-run-meta {
+  display: grid;
+  gap: 3px;
+  color: #667085;
+  font-size: 11px;
+}
+
+.payroll-run-totals {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.payroll-run-totals span {
+  display: grid;
+  gap: 2px;
+  color: #667085;
+  font-size: 10px;
+}
+
+.payroll-run-totals strong {
+  color: #344054;
+  font-size: 12px;
+}
+
+.payroll-run-status-current_locked {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.payroll-run-status-reopened_pending_regeneration {
+  background: #fffaeb;
+  color: #b54708;
+}
+
+.payroll-run-status-superseded {
+  background: #f2f4f7;
+  color: #667085;
+}
+
+.payroll-selected-placeholder {
+  display: grid;
+  gap: 7px;
+  padding: 28px 20px;
+}
+
+.payroll-selected-placeholder strong {
+  color: #172033;
+  font-size: 15px;
+}
+
+.payroll-selected-placeholder span {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (max-width: 1180px) {
+  .payroll-filters {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .payroll-filters,
+  .payroll-run-totals {
+    grid-template-columns: 1fr;
+  }
+
+  .payroll-run-row-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

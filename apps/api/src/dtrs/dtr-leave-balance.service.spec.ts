@@ -1,5 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
-import { LeaveTransactionType, LeaveUnit, Prisma } from '@payroll/database';
+import {
+  EmployeeType,
+  LeaveBalanceKind,
+  LeaveTransactionType,
+  LeaveUnit,
+  Prisma,
+} from '@payroll/database';
 
 import { DtrLeaveBalanceService } from './dtr-leave-balance.service';
 import { DTR_LEAVE_TRANSACTION_REFERENCE_TYPE } from './dtr-leave.constants';
@@ -10,6 +16,7 @@ describe('DtrLeaveBalanceService', () => {
   const companyId = '22222222-2222-4222-8222-222222222222';
   const leaveTypeId = '33333333-3333-4333-8333-333333333333';
   const leaveAccountId = '44444444-4444-4444-8444-444444444444';
+  const entitlementCycleId = '88888888-8888-4888-8888-888888888888';
   const entryId = '55555555-5555-4555-8555-555555555555';
   const actorUserId = '66666666-6666-4666-8666-666666666666';
 
@@ -21,6 +28,10 @@ describe('DtrLeaveBalanceService', () => {
 
   const transactionMock = {
     leaveType: {
+      findUnique: jest.fn(),
+    },
+
+    employeeLeaveEntitlementCycle: {
       findUnique: jest.fn(),
     },
 
@@ -61,6 +72,12 @@ describe('DtrLeaveBalanceService', () => {
       code: 'VL',
       unit: LeaveUnit.DAY,
       active: true,
+    });
+
+    transactionMock.employeeLeaveEntitlementCycle.findUnique.mockResolvedValue({
+      id: entitlementCycleId,
+      employeeType: EmployeeType.LACOM_INTERNAL,
+      initializationReviewRequired: false,
     });
 
     transactionMock.employeeLeaveAccount.findUnique.mockResolvedValue({
@@ -172,6 +189,153 @@ describe('DtrLeaveBalanceService', () => {
         usageInput,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(
+      transactionMock.employeeLeaveAccount.updateMany,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('resolves an internal VL account from the work-date annual cycle', async () => {
+    await service.applyUsageInTransaction(
+      transactionMock as unknown as Prisma.TransactionClient,
+      usageInput,
+    );
+
+    expect(
+      transactionMock.employeeLeaveEntitlementCycle.findUnique,
+    ).toHaveBeenCalledWith({
+      where: {
+        employeeId_calendarYear: {
+          employeeId,
+          calendarYear: 2026,
+        },
+      },
+
+      select: {
+        id: true,
+        employeeType: true,
+        initializationReviewRequired: true,
+      },
+    });
+
+    expect(
+      transactionMock.employeeLeaveAccount.findUnique,
+    ).toHaveBeenCalledWith({
+      where: {
+        entitlementCycleId_balanceKind: {
+          entitlementCycleId,
+          balanceKind: LeaveBalanceKind.VL,
+        },
+      },
+
+      select: {
+        id: true,
+      },
+    });
+  });
+
+  it('does not fall back to a prior-year leave cycle for new-year usage', async () => {
+    const newYearWorkDate = new Date('2027-01-05T00:00:00.000Z');
+
+    transactionMock.employeeLeaveEntitlementCycle.findUnique.mockResolvedValue(
+      null,
+    );
+
+    await expect(
+      service.applyUsageInTransaction(
+        transactionMock as unknown as Prisma.TransactionClient,
+        {
+          ...usageInput,
+          workDate: newYearWorkDate,
+        },
+      ),
+    ).rejects.toThrow(
+      'Employee does not have an initialized 2027 leave entitlement.',
+    );
+
+    expect(
+      transactionMock.employeeLeaveEntitlementCycle.findUnique,
+    ).toHaveBeenCalledWith({
+      where: {
+        employeeId_calendarYear: {
+          employeeId,
+          calendarYear: 2027,
+        },
+      },
+
+      select: {
+        id: true,
+        employeeType: true,
+        initializationReviewRequired: true,
+      },
+    });
+
+    expect(
+      transactionMock.employeeLeaveAccount.findUnique,
+    ).not.toHaveBeenCalled();
+
+    expect(
+      transactionMock.employeeLeaveAccount.updateMany,
+    ).not.toHaveBeenCalled();
+
+    expect(transactionMock.leaveTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('maps client VL and SL usage to the shared annual balance', async () => {
+    transactionMock.leaveType.findUnique.mockResolvedValue({
+      id: leaveTypeId,
+      companyId,
+      code: 'SL',
+      unit: LeaveUnit.DAY,
+      active: true,
+    });
+
+    transactionMock.employeeLeaveEntitlementCycle.findUnique.mockResolvedValue({
+      id: entitlementCycleId,
+      employeeType: EmployeeType.CLIENT_EMPLOYEE,
+      initializationReviewRequired: false,
+    });
+
+    await service.applyUsageInTransaction(
+      transactionMock as unknown as Prisma.TransactionClient,
+      usageInput,
+    );
+
+    expect(
+      transactionMock.employeeLeaveAccount.findUnique,
+    ).toHaveBeenCalledWith({
+      where: {
+        entitlementCycleId_balanceKind: {
+          entitlementCycleId,
+          balanceKind: LeaveBalanceKind.SHARED_VL_SL_POOL,
+        },
+      },
+
+      select: {
+        id: true,
+      },
+    });
+  });
+
+  it('blocks new leave usage while the annual balance requires review', async () => {
+    transactionMock.employeeLeaveEntitlementCycle.findUnique.mockResolvedValue({
+      id: entitlementCycleId,
+      employeeType: EmployeeType.LACOM_INTERNAL,
+      initializationReviewRequired: true,
+    });
+
+    await expect(
+      service.applyUsageInTransaction(
+        transactionMock as unknown as Prisma.TransactionClient,
+        usageInput,
+      ),
+    ).rejects.toThrow(
+      '2026 leave balances require Payroll Manager review before use.',
+    );
+
+    expect(
+      transactionMock.employeeLeaveAccount.findUnique,
+    ).not.toHaveBeenCalled();
 
     expect(
       transactionMock.employeeLeaveAccount.updateMany,

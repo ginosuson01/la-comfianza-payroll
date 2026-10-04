@@ -9,18 +9,12 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { EmployeePayrollStatus } from '@payroll/database';
+import { EmployeePayrollStatus, EmployeeType } from '@payroll/database';
 
 const trimString = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
 
 export class CreateEmployeeDto {
-  @Transform(trimString)
-  @IsString()
-  @MinLength(1)
-  @MaxLength(50)
-  employeeNumber!: string;
-
   @Transform(trimString)
   @IsString()
   @MinLength(1)
@@ -101,6 +95,9 @@ export class CreateEmployeeDto {
 
   @IsUUID()
   companyId!: string;
+
+  @IsEnum(EmployeeType)
+  employeeType!: EmployeeType;
 
   @IsOptional()
   @IsUUID()

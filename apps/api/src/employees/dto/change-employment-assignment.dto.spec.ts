@@ -2,6 +2,7 @@ import 'reflect-metadata';
 
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { EmployeeType } from '@payroll/database';
 
 import { ChangeEmploymentAssignmentDto } from './change-employment-assignment.dto';
 
@@ -15,6 +16,7 @@ describe('ChangeEmploymentAssignmentDto', () => {
   it('accepts a valid employment assignment change', async () => {
     const dto = plainToInstance(ChangeEmploymentAssignmentDto, {
       companyId,
+      employeeType: EmployeeType.CLIENT_EMPLOYEE,
       departmentId,
       positionId,
       companyEmployeeNumber: ' YAK-002 ',
@@ -31,6 +33,7 @@ describe('ChangeEmploymentAssignmentDto', () => {
   it('converts a blank company employee number to null', async () => {
     const dto = plainToInstance(ChangeEmploymentAssignmentDto, {
       companyId,
+      employeeType: EmployeeType.CLIENT_EMPLOYEE,
       companyEmployeeNumber: '   ',
       effectiveDate: '2026-09-20',
     });
@@ -45,6 +48,7 @@ describe('ChangeEmploymentAssignmentDto', () => {
   it('rejects an invalid company id', async () => {
     const dto = plainToInstance(ChangeEmploymentAssignmentDto, {
       companyId: 'invalid-company-id',
+      employeeType: EmployeeType.CLIENT_EMPLOYEE,
       effectiveDate: '2026-09-20',
     });
 
@@ -56,6 +60,7 @@ describe('ChangeEmploymentAssignmentDto', () => {
   it('rejects an invalid effective date', async () => {
     const dto = plainToInstance(ChangeEmploymentAssignmentDto, {
       companyId,
+      employeeType: EmployeeType.CLIENT_EMPLOYEE,
       effectiveDate: 'not-a-date',
     });
 

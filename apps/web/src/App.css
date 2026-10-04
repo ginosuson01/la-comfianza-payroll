@@ -956,3 +956,34 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.attendance-create-dtr-section {
+  align-items: flex-start;
+}
+
+.attendance-create-dtr-section > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
+.attendance-create-dtr-section p {
+  margin-bottom: 0;
+}
+
+.attendance-create-dtr-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+@media (max-width: 700px) {
+  .attendance-create-dtr-actions {
+    width: 100%;
+    flex-direction: column-reverse;
+  }
+
+  .attendance-create-dtr-actions button {
+    width: 100%;
+  }
+}

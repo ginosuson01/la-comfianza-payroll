@@ -62,6 +62,18 @@ export interface AttendanceHolidayBreakdown {
   workedMinutes: number;
 }
 
+export interface AttendancePremiumWorkBreakdown {
+  restDay: boolean;
+
+  holidayType: AttendanceHolidayType | null;
+
+  regularMinutes: number;
+  overtimeMinutes: number;
+  nightDifferentialMinutes: number;
+
+  workedMinutes: number;
+}
+
 export interface AttendanceAggregate {
   entryCount: number;
   restDayEntryCount: number;
@@ -81,6 +93,8 @@ export interface AttendanceAggregate {
   leaveBreakdown: AttendanceLeaveBreakdown[];
   overtimeBreakdown: AttendanceOvertimeBreakdown[];
   holidayBreakdown: AttendanceHolidayBreakdown[];
+
+  premiumWorkBreakdown: AttendancePremiumWorkBreakdown[];
 }
 
 interface MutableLeaveBreakdown extends AttendanceLeaveBreakdown {}
@@ -88,6 +102,9 @@ interface MutableLeaveBreakdown extends AttendanceLeaveBreakdown {}
 interface MutableOvertimeBreakdown extends AttendanceOvertimeBreakdown {}
 
 interface MutableHolidayBreakdown extends AttendanceHolidayBreakdown {}
+
+interface MutablePremiumWorkBreakdown
+  extends AttendancePremiumWorkBreakdown {}
 
 function assertNonNegativeWholeMinutes(
   value: number,
@@ -194,6 +211,9 @@ export function summarizeAttendance(
   const holidayBreakdownById =
     new Map<string, MutableHolidayBreakdown>();
 
+  const premiumWorkBreakdownByClassification =
+    new Map<string, MutablePremiumWorkBreakdown>();
+
   for (const entry of entries) {
     validateEntry(entry);
 
@@ -230,6 +250,52 @@ export function summarizeAttendance(
     const entryWorkedMinutes =
       entry.regularMinutes +
       entryOvertimeMinutes;
+
+    const premiumClassificationKey =
+      `${entry.restDay ? 'REST_DAY' : 'WORKDAY'}|${
+        entry.holiday?.type ?? 'NO_HOLIDAY'
+      }`;
+
+    const existingPremiumClassification =
+      premiumWorkBreakdownByClassification.get(
+        premiumClassificationKey,
+      );
+
+    if (existingPremiumClassification) {
+      existingPremiumClassification.regularMinutes +=
+        entry.regularMinutes;
+
+      existingPremiumClassification.overtimeMinutes +=
+        entryOvertimeMinutes;
+
+      existingPremiumClassification.nightDifferentialMinutes +=
+        entry.nightDifferentialMinutes;
+
+      existingPremiumClassification.workedMinutes +=
+        entryWorkedMinutes;
+    } else {
+      premiumWorkBreakdownByClassification.set(
+        premiumClassificationKey,
+        {
+          restDay: entry.restDay,
+
+          holidayType:
+            entry.holiday?.type ?? null,
+
+          regularMinutes:
+            entry.regularMinutes,
+
+          overtimeMinutes:
+            entryOvertimeMinutes,
+
+          nightDifferentialMinutes:
+            entry.nightDifferentialMinutes,
+
+          workedMinutes:
+            entryWorkedMinutes,
+        },
+      );
+    }
 
     if (entry.restDay) {
       restDayEntryCount += 1;
@@ -347,5 +413,18 @@ export function summarizeAttendance(
       ).sort((left, right) =>
         left.date.localeCompare(right.date),
       ),
+
+    premiumWorkBreakdown:
+      Array.from(
+        premiumWorkBreakdownByClassification.values(),
+      ).sort((left, right) => {
+        if (left.restDay !== right.restDay) {
+          return left.restDay ? 1 : -1;
+        }
+
+        return (left.holidayType ?? '').localeCompare(
+          right.holidayType ?? '',
+        );
+      }),
   };
 }

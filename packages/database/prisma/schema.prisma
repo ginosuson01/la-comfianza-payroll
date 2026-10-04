@@ -56,9 +56,19 @@ enum EmployeePayrollStatus {
   RESIGNED
 }
 
+enum EmployeeType {
+  LACOM_INTERNAL
+  CLIENT_EMPLOYEE
+}
+
 enum PayBasis {
   DAILY
   MONTHLY
+}
+
+enum PayrollCompensationSource {
+  EMPLOYEE_OVERRIDE
+  COMPANY_STANDARD
 }
 
 enum PayoutMethod {
@@ -256,6 +266,8 @@ model Company {
   userAccesses UserCompanyAccess[]
 
   payrollSetup CompanyPayrollSetup?
+
+  compensationRecords CompanyCompensationRecord[]
 
   cutoffTemplates CutoffTemplate[]
   holidays        Holiday[]
@@ -516,6 +528,8 @@ model Employee {
 
   leaveAccounts EmployeeLeaveAccount[]
 
+  leaveEntitlementCycles EmployeeLeaveEntitlementCycle[]
+
   dtrs Dtr[]
 
   payrollAdjustments PayrollAdjustment[]
@@ -558,6 +572,8 @@ model EmploymentRecord {
 
   companyEmployeeNumber String?
 
+  employeeType EmployeeType?
+
   startDate DateTime  @db.Date
   endDate   DateTime? @db.Date
 
@@ -577,6 +593,8 @@ model EmploymentRecord {
   payrollProfile EmployeePayrollProfile?
 
   recurringPayrollItems RecurringPayrollItem[]
+
+  leaveEntitlementCycles EmployeeLeaveEntitlementCycle[]
 
   dtrs Dtr[]
 
@@ -607,6 +625,25 @@ model CompensationRecord {
 
   @@index([employmentRecordId, effectiveFrom])
   @@map("compensation_records")
+}
+
+model CompanyCompensationRecord {
+  id        String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+
+  payBasis PayBasis
+
+  rate Decimal @db.Decimal(18, 4)
+
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, effectiveFrom])
+  @@map("company_compensation_records")
 }
 
 model EmployeePayrollProfile {
@@ -705,10 +742,63 @@ model LeaveType {
   @@map("leave_types")
 }
 
+model EmployeeLeaveEntitlementCycle {
+  id                 String @id @default(uuid()) @db.Uuid
+  employeeId         String @db.Uuid
+  employmentRecordId String @db.Uuid
+
+  calendarYear Int
+
+  // Snapshot of the employment inputs used to determine entitlement.
+  employeeType        EmployeeType
+  employmentStartDate DateTime     @db.Date
+  eligibilityDate     DateTime     @db.Date
+
+  // Full annual entitlement for the applicable employee classification.
+  annualEntitlementDays Decimal @db.Decimal(12, 4)
+
+  // Jan 1 when already eligible at year start, otherwise the mid-year
+  // eligibility date. Entitlement is not prorated.
+  effectiveFrom DateTime @db.Date
+
+  // Calendar-year entitlement expires on Dec 31. No carryover.
+  expiresOn DateTime @db.Date
+
+  // Existing employees initialized during system deployment may require
+  // Payroll Manager review because pre-go-live leave usage may be unknown.
+  initializationReviewRequired Boolean @default(false)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  employmentRecord EmploymentRecord @relation(fields: [employmentRecordId], references: [id], onDelete: Restrict)
+
+  leaveAccounts EmployeeLeaveAccount[]
+
+  // Database-level idempotency boundary for an employee's annual entitlement.
+  @@unique([employeeId, calendarYear])
+  @@index([employmentRecordId])
+  @@index([calendarYear])
+  @@index([initializationReviewRequired])
+  @@map("employee_leave_entitlement_cycles")
+}
+
+enum LeaveBalanceKind {
+  VL
+  SL
+  SHARED_VL_SL_POOL
+}
+
 model EmployeeLeaveAccount {
   id          String @id @default(uuid()) @db.Uuid
   employeeId  String @db.Uuid
-  leaveTypeId String @db.Uuid
+  leaveTypeId String? @db.Uuid
+
+  // Optional during migration from legacy leave accounts.
+  entitlementCycleId String? @db.Uuid
+  balanceKind        LeaveBalanceKind?
 
   currentBalance Decimal @default(0) @db.Decimal(12, 4)
 
@@ -717,12 +807,16 @@ model EmployeeLeaveAccount {
 
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
 
-  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  leaveType LeaveType? @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+
+  entitlementCycle EmployeeLeaveEntitlementCycle? @relation(fields: [entitlementCycleId], references: [id], onDelete: Restrict)
 
   transactions LeaveTransaction[]
 
   @@unique([employeeId, leaveTypeId])
+  @@unique([entitlementCycleId, balanceKind])
   @@index([leaveTypeId])
+  @@index([entitlementCycleId])
   @@map("employee_leave_accounts")
 }
 
@@ -901,6 +995,8 @@ model PayrollAdjustment {
 
   reason String
 
+  taxable Boolean?
+
   createdByUserId String   @db.Uuid
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
 
@@ -937,12 +1033,12 @@ model PayrollRun {
   // Frozen configuration used for this exact payroll run.
   configSnapshot Json @db.JsonB
 
-  totalGross         Decimal @default(0) @db.Decimal(18, 2)
-  totalNet           Decimal @default(0) @db.Decimal(18, 2)
-  clientPayableGross Decimal @default(0) @db.Decimal(18, 2)
-  cashPayoutTotal    Decimal @default(0) @db.Decimal(18, 2)
-  atmPayoutTotal     Decimal @default(0) @db.Decimal(18, 2)
-  activeHoldTotal    Decimal @default(0) @db.Decimal(18, 2)
+  totalGross         Decimal  @default(0) @db.Decimal(18, 2)
+  totalNet           Decimal  @default(0) @db.Decimal(18, 2)
+  clientPayableGross Decimal? @db.Decimal(18, 2)
+  cashPayoutTotal    Decimal  @default(0) @db.Decimal(18, 2)
+  atmPayoutTotal     Decimal  @default(0) @db.Decimal(18, 2)
+  activeHoldTotal    Decimal  @default(0) @db.Decimal(18, 2)
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
@@ -981,6 +1077,8 @@ model PayrollRunEmployee {
   payBasisSnapshot PayBasis
   baseRateSnapshot Decimal  @db.Decimal(18, 4)
 
+  compensationSourceSnapshot PayrollCompensationSource?
+
   basicPay        Decimal @default(0) @db.Decimal(18, 2)
   allowancesTotal Decimal @default(0) @db.Decimal(18, 2)
   premiumPayTotal Decimal @default(0) @db.Decimal(18, 2)
@@ -996,8 +1094,8 @@ model PayrollRunEmployee {
   cashPayout Decimal @default(0) @db.Decimal(18, 2)
   atmPayout  Decimal @default(0) @db.Decimal(18, 2)
 
-  heldAmount         Decimal @default(0) @db.Decimal(18, 2)
-  clientPayableGross Decimal @default(0) @db.Decimal(18, 2)
+  heldAmount         Decimal  @default(0) @db.Decimal(18, 2)
+  clientPayableGross Decimal? @db.Decimal(18, 2)
 
   taxableCompensation Decimal @default(0) @db.Decimal(18, 2)
   withholdingTax      Decimal @default(0) @db.Decimal(18, 2)

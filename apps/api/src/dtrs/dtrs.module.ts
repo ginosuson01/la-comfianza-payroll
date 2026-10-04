@@ -7,6 +7,8 @@ import { AttendanceReferenceController } from './attendance-reference.controller
 import { AttendanceReferenceService } from './attendance-reference.service';
 import { DtrAttendanceSummaryController } from './dtr-attendance-summary.controller';
 import { DtrAttendanceSummaryService } from './dtr-attendance-summary.service';
+import { DtrCutoffEmployeesController } from './dtr-cutoff-employees.controller';
+import { DtrCutoffEmployeesService } from './dtr-cutoff-employees.service';
 import { DtrEntriesService } from './dtr-entries.service';
 import { DtrEntryValidationService } from './dtr-entry-validation.service';
 import { DtrLeaveBalanceService } from './dtr-leave-balance.service';
@@ -21,6 +23,7 @@ import { DtrsService } from './dtrs.service';
     DtrsController,
     AttendanceReferenceController,
     DtrAttendanceSummaryController,
+    DtrCutoffEmployeesController,
   ],
 
   providers: [
@@ -31,6 +34,7 @@ import { DtrsService } from './dtrs.service';
     DtrLeaveBalanceService,
     AttendanceReferenceService,
     DtrAttendanceSummaryService,
+    DtrCutoffEmployeesService,
   ],
 
   exports: [

@@ -4,7 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PayrollCutoffStatus, type Prisma } from '@payroll/database';
+import {
+  PayrollCutoffStatus,
+  PayrollRunStatus,
+  type Prisma,
+} from '@payroll/database';
 
 import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../database/prisma.service';
@@ -141,7 +145,9 @@ export class PayrollCutoffsService {
 
         reference: this.getCutoffReference(currentCutoff),
 
-        details: `Locked payroll cutoff ${this.getCutoffReference(currentCutoff)}.`,
+        details:
+          `Locked payroll cutoff ` +
+          `${this.getCutoffReference(currentCutoff)}.`,
 
         metadata: {
           previousStatus,
@@ -179,9 +185,16 @@ export class PayrollCutoffsService {
     const reopenedAt = new Date();
 
     return this.prisma.$transaction(async (transaction) => {
-      const updated = await transaction.payrollCutoff.update({
+      /*
+       * Compare-and-set the cutoff from LOCKED -> REOPENED.
+       *
+       * This prevents two concurrent reopen requests from
+       * independently succeeding against the same locked cutoff.
+       */
+      const cutoffUpdate = await transaction.payrollCutoff.updateMany({
         where: {
           id: payrollCutoffId,
+          status: PayrollCutoffStatus.LOCKED,
         },
 
         data: {
@@ -189,9 +202,75 @@ export class PayrollCutoffsService {
           reopenedAt,
           lastReopenReason: normalizedReason,
         },
+      });
+
+      if (cutoffUpdate.count !== 1) {
+        throw new ConflictException(
+          'Payroll cutoff is no longer LOCKED and cannot be reopened.',
+        );
+      }
+
+      /*
+       * A cutoff can exist without a generated PayrollRun because
+       * cutoff locking infrastructure existed before payroll
+       * generation.
+       *
+       * Therefore, absence of a PayrollRun is valid here.
+       *
+       * When a generated CURRENT_LOCKED run does exist, reopening
+       * the cutoff makes that frozen version no longer current for
+       * operational use. Preserve it in history and mark it as
+       * pending regeneration.
+       */
+      const currentPayrollRun = await transaction.payrollRun.findFirst({
+        where: {
+          payrollCutoffId,
+          status: PayrollRunStatus.CURRENT_LOCKED,
+        },
+
+        orderBy: {
+          version: 'desc',
+        },
+
+        select: {
+          id: true,
+          version: true,
+          status: true,
+        },
+      });
+
+      if (currentPayrollRun) {
+        const payrollRunUpdate = await transaction.payrollRun.updateMany({
+          where: {
+            id: currentPayrollRun.id,
+            status: PayrollRunStatus.CURRENT_LOCKED,
+          },
+
+          data: {
+            status: PayrollRunStatus.REOPENED_PENDING_REGENERATION,
+          },
+        });
+
+        if (payrollRunUpdate.count !== 1) {
+          throw new ConflictException(
+            'Current payroll run changed while the cutoff was being reopened.',
+          );
+        }
+      }
+
+      const updated = await transaction.payrollCutoff.findUnique({
+        where: {
+          id: payrollCutoffId,
+        },
 
         select: PAYROLL_CUTOFF_SELECT,
       });
+
+      if (!updated) {
+        throw new NotFoundException(
+          'Payroll cutoff was not found after reopening.',
+        );
+      }
 
       await this.auditLog.recordSuccessInTransaction(transaction, {
         actorUserId,
@@ -205,15 +284,33 @@ export class PayrollCutoffsService {
 
         reference: this.getCutoffReference(currentCutoff),
 
-        details:
-          `Reopened payroll cutoff ${this.getCutoffReference(currentCutoff)}. ` +
-          `Reason: ${normalizedReason}`,
+        details: currentPayrollRun
+          ? `Reopened payroll cutoff ${this.getCutoffReference(
+              currentCutoff,
+            )}. Payroll run version ${
+              currentPayrollRun.version
+            } is pending regeneration. Reason: ${normalizedReason}`
+          : `Reopened payroll cutoff ${this.getCutoffReference(
+              currentCutoff,
+            )}. Reason: ${normalizedReason}`,
 
         metadata: {
           previousStatus,
           newStatus: PayrollCutoffStatus.REOPENED,
           reopenedAt: reopenedAt.toISOString(),
           reason: normalizedReason,
+
+          payrollRunTransition: currentPayrollRun
+            ? {
+                payrollRunId: currentPayrollRun.id,
+
+                version: currentPayrollRun.version,
+
+                previousStatus: PayrollRunStatus.CURRENT_LOCKED,
+
+                newStatus: PayrollRunStatus.REOPENED_PENDING_REGENERATION,
+              }
+            : null,
         },
       });
 
@@ -242,9 +339,9 @@ export class PayrollCutoffsService {
   private getCutoffReference(
     cutoff: Pick<PayrollCutoffView, 'startDate' | 'endDate'>,
   ): string {
-    return `${this.toDateString(cutoff.startDate)} to ${this.toDateString(
-      cutoff.endDate,
-    )}`;
+    return `${this.toDateString(
+      cutoff.startDate,
+    )} to ${this.toDateString(cutoff.endDate)}`;
   }
 
   private toDateString(value: Date): string {
