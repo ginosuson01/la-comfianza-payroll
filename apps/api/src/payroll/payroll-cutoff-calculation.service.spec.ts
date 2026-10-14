@@ -10,6 +10,7 @@ import {
   type PayrollEmployeeCalculationResult,
 } from './payroll-calculation.service';
 
+import { createValidGoldenPayrollTemplateConfig } from '../companies/golden-payroll-template.test-fixture';
 import type { PhilippineGovernmentContributionOrchestrationService } from './philippine-government-contribution-orchestration.service';
 
 import {
@@ -23,6 +24,34 @@ import type {
 } from './payroll-cutoff-input.service';
 
 import type { PayrollEmployeeInputAssembly } from './payroll-input.service';
+
+function createGoldenConfigSnapshot(): Record<string, unknown> {
+  return JSON.parse(
+    JSON.stringify(createValidGoldenPayrollTemplateConfig()),
+  ) as Record<string, unknown>;
+}
+
+function createGoldenConfigSnapshotWithMinimumWage(): Record<string, unknown> {
+  const snapshot = createGoldenConfigSnapshot();
+
+  const statutory = snapshot.statutory as Record<string, unknown>;
+
+  statutory.minimumWage = {
+    regionCode: 'IVA',
+
+    wageOrderCode: 'SYNTHETIC-WAGE-ORDER',
+
+    areaClassification: 'Synthetic area classification',
+
+    sector: 'Synthetic sector',
+
+    dailyRate: '600.00',
+
+    rateEffectiveFrom: '2026-01-01',
+  };
+
+  return snapshot;
+}
 
 function createAssembly(
   employeeId: string,
@@ -89,9 +118,7 @@ function createAssembly(
 
         standardWorkMinutesPerDay: 480,
 
-        configSnapshot: {
-          test: true,
-        },
+        configSnapshot: createGoldenConfigSnapshot(),
       },
     },
   };
@@ -522,23 +549,7 @@ describe('PayrollCutoffCalculationService', () => {
 
     employee.input.baseRate = '650.0000';
 
-    employee.input.config.configSnapshot = {
-      statutory: {
-        minimumWage: {
-          regionCode: 'IVA',
-
-          wageOrderCode: 'SYNTHETIC-WAGE-ORDER',
-
-          areaClassification: 'Synthetic area classification',
-
-          sector: 'Synthetic sector',
-
-          dailyRate: '600.00',
-
-          rateEffectiveFrom: '2026-01-01',
-        },
-      },
-    };
+    employee.input.config.configSnapshot = createGoldenConfigSnapshotWithMinimumWage();
 
     const { calculation, philippineContributions, service } = createFixture(
       createCollection([employee]),
@@ -673,9 +684,7 @@ describe('PayrollCutoffCalculationService', () => {
      * Deliberately leave the synthetic setup without a
      * minimum-wage reference.
      */
-    employee.input.config.configSnapshot = {
-      test: true,
-    };
+    employee.input.config.configSnapshot = createGoldenConfigSnapshot();
 
     const { calculation, philippineContributions, service } = createFixture(
       createCollection([employee]),

@@ -1,5 +1,6 @@
 import type { CorePayrollCalculationResult } from '@payroll/payroll-engine';
 
+import { createValidGoldenPayrollTemplateConfig } from '../companies/golden-payroll-template.test-fixture';
 import type { PayrollCalculationService } from './payroll-calculation.service';
 
 import type { PayrollCutoffPeriodService } from './payroll-cutoff-period.service';
@@ -109,7 +110,9 @@ function createAssembly(
 
         standardWorkMinutesPerDay: 480,
 
-        configSnapshot: {},
+        configSnapshot: JSON.parse(
+          JSON.stringify(createValidGoldenPayrollTemplateConfig()),
+        ) as Record<string, unknown>,
       },
     },
   };

@@ -1,10 +1,10 @@
 import {
-  PHILIPPINE_DAILY_PREMIUM_OPTIONS,
   formatMoney,
   parseMoney,
   type CorePayrollCalculationOptions,
   type EmployeePayrollTreatmentOptions,
   type PayrollCalculationInput,
+  type PremiumPayOptions,
   type StatutoryPayrollCalculationResult,
 } from '@payroll/payroll-engine';
 
@@ -61,8 +61,69 @@ export function buildPhilippineCorePayrollOptions(
      * correct 10% must use the applicable underlying
      * regular/rest-day/holiday/OT rate.
      */
-    premium: PHILIPPINE_DAILY_PREMIUM_OPTIONS,
+    premium: readPremiumPayOptions(
+      input.config.configSnapshot,
+    ),
   };
+}
+
+function readPremiumPayOptions(
+  configSnapshot: Readonly<Record<string, unknown>>,
+): PremiumPayOptions {
+  const statutory = requireObject(
+    configSnapshot['statutory'],
+    'Company statutory payroll configuration',
+  );
+
+  const premium = requireObject(
+    statutory['premium'],
+    'Philippine premium-pay configuration',
+  );
+
+  const regularWorkRules = requireObject(
+    premium['regularWorkRules'],
+    'Philippine regular-work premium rules',
+  );
+
+  const overtimeRules = requireObject(
+    premium['overtimeRules'],
+    'Philippine overtime premium rules',
+  );
+
+  return {
+    regularWorkRules:
+      regularWorkRules as PremiumPayOptions['regularWorkRules'],
+
+    overtimeRules:
+      overtimeRules as PremiumPayOptions['overtimeRules'],
+
+    /*
+     * Do not set nightDifferentialRule here.
+     *
+     * The frozen Golden config carries nightDifferentialRate, but the
+     * current DTR model does not identify which ND minutes overlap
+     * regular versus OT / holiday / rest-day work. Supplying the
+     * generic flat-ND rule would therefore change the approved
+     * calculation behavior incorrectly.
+     */
+  };
+}
+
+function requireObject(
+  value: unknown,
+  fieldName: string,
+): Readonly<Record<string, unknown>> {
+  if (
+    value === null ||
+    Array.isArray(value) ||
+    typeof value !== 'object'
+  ) {
+    throw new Error(
+      `${fieldName} must be present as an object in the frozen payroll configuration snapshot.`,
+    );
+  }
+
+  return value as Readonly<Record<string, unknown>>;
 }
 
 export function buildPhilippineEmployeeTreatmentOptions(

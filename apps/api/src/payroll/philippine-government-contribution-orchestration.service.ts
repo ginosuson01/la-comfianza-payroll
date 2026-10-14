@@ -195,6 +195,8 @@ export class PhilippineGovernmentContributionOrchestrationService {
       basis: {
         sssMonthlyCompensation: sss.monthlyCompensation,
       },
+
+      configSnapshot: assembly.input.config.configSnapshot,
     });
 
     return {

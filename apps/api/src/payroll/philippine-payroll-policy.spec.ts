@@ -1,4 +1,5 @@
 import {
+  PHILIPPINE_DAILY_PREMIUM_OPTIONS,
   summarizeAttendance,
   type PayrollCalculationInput,
 } from '@payroll/payroll-engine';
@@ -47,7 +48,19 @@ function createInput(
 
       standardWorkMinutesPerDay: 480,
 
-      configSnapshot: {},
+      configSnapshot: {
+        statutory: {
+          premium: {
+            regularWorkRules:
+              PHILIPPINE_DAILY_PREMIUM_OPTIONS.regularWorkRules ?? {},
+
+            overtimeRules:
+              PHILIPPINE_DAILY_PREMIUM_OPTIONS.overtimeRules ?? {},
+
+            nightDifferentialRate: '0.1000',
+          },
+        },
+      },
     },
 
     ...overrides,
@@ -176,4 +189,102 @@ describe('Philippine payroll policy adapter', () => {
       ),
     ).toEqual(explicit);
   });
+
+  it('uses premium multipliers from the frozen company payroll config snapshot', () => {
+    const input = createInput({
+      config: {
+        companyPayrollSetupVersionId: 'setup-version-custom',
+
+        version: 99,
+
+        standardWorkMinutesPerDay: 480,
+
+        configSnapshot: {
+          statutory: {
+            premium: {
+              regularWorkRules: {
+                'WORKDAY|REGULAR': {
+                  multiplier: '1.7500',
+
+                  semantics: 'TOTAL',
+                },
+              },
+
+              overtimeRules: {
+                REGULAR: {
+                  multiplier: '1.5000',
+
+                  semantics: 'TOTAL',
+                },
+              },
+
+              nightDifferentialRate: '0.2500',
+            },
+          },
+        },
+      },
+    });
+
+    const options = buildPhilippineCorePayrollOptions(input);
+
+    expect(
+      options.premium?.regularWorkRules?.['WORKDAY|REGULAR'],
+    ).toEqual({
+      multiplier: '1.7500',
+
+      semantics: 'TOTAL',
+    });
+
+    expect(
+      options.premium?.overtimeRules?.['REGULAR'],
+    ).toEqual({
+      multiplier: '1.5000',
+
+      semantics: 'TOTAL',
+    });
+
+    expect(
+      options.premium?.regularWorkRules?.['WORKDAY|REGULAR'],
+    ).not.toEqual(
+      PHILIPPINE_DAILY_PREMIUM_OPTIONS
+        .regularWorkRules?.['WORKDAY|REGULAR'],
+    );
+
+    expect(
+      options.premium?.overtimeRules?.['REGULAR'],
+    ).not.toEqual(
+      PHILIPPINE_DAILY_PREMIUM_OPTIONS
+        .overtimeRules?.['REGULAR'],
+    );
+
+    /*
+     * The Golden snapshot carries nightDifferentialRate, but the
+     * generic flat ND rule must remain intentionally unset until
+     * DTR data can classify ND overlap correctly.
+     */
+    expect(options.premium?.nightDifferentialRule).toBeUndefined();
+  });
+
+  it('rejects a frozen config snapshot without premium rules', () => {
+    const input = createInput({
+      config: {
+        companyPayrollSetupVersionId: 'setup-version-missing-premium',
+
+        version: 100,
+
+        standardWorkMinutesPerDay: 480,
+
+        configSnapshot: {
+          statutory: {},
+        },
+      },
+    });
+
+    expect(() =>
+      buildPhilippineCorePayrollOptions(input),
+    ).toThrow(
+      /Philippine premium-pay configuration must be present as an object/,
+    );
+  });
+
 });

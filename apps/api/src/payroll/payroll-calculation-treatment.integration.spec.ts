@@ -3,6 +3,7 @@ import {
   type PayrollCalculationInput,
 } from '@payroll/payroll-engine';
 
+import { createValidGoldenPayrollTemplateConfig } from '../companies/golden-payroll-template.test-fixture';
 import { PayrollCalculationService } from './payroll-calculation.service';
 import type { PayrollEmployeeInputAssembly } from './payroll-input.service';
 import { PayrollStatutoryConfigService } from './payroll-statutory-config.service';
@@ -105,7 +106,9 @@ function createAssembly(
 
         standardWorkMinutesPerDay: 480,
 
-        configSnapshot: {},
+        configSnapshot: JSON.parse(
+          JSON.stringify(createValidGoldenPayrollTemplateConfig()),
+        ) as Record<string, unknown>,
       },
 
       ...overrides,

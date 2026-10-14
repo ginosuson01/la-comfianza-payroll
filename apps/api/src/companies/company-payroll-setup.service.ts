@@ -9,6 +9,11 @@ import { ConfigStatus, type Prisma } from '@payroll/database';
 import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../database/prisma.service';
 import {
+  CompanyPayrollConfigResolverService,
+  type CompanyPayrollConfigOverlay,
+} from './company-payroll-config-resolver.service';
+import { GoldenPayrollTemplateService } from './golden-payroll-template.service';
+import {
   COMPANY_PAYROLL_SETUP_AUDIT_MODULE,
   COMPANY_PAYROLL_SETUP_ENTITY_TYPE,
   CompanyPayrollSetupAuditAction,
@@ -48,6 +53,8 @@ export class CompanyPayrollSetupService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly goldenPayrollTemplate: GoldenPayrollTemplateService,
+    private readonly payrollConfigResolver: CompanyPayrollConfigResolverService,
   ) {}
 
   async getCompanyPayrollSetup(
@@ -142,7 +149,7 @@ export class CompanyPayrollSetupService {
      * Invalid payroll configuration must never start
      * persistence work.
      */
-    const config = this.buildPayrollSetupConfig(
+    const companyConfig = this.buildPayrollSetupConfig(
       input.standardWorkMinutesPerDay,
       input.philHealthDailyWorkerScheduleDaysPerWeek,
       {
@@ -153,6 +160,20 @@ export class CompanyPayrollSetupService {
         dailyRate: input.minimumWageDailyRate,
         rateEffectiveFrom: input.minimumWageRateEffectiveFrom,
       },
+    );
+
+    /*
+     * If effectiveFrom is omitted, the initial setup is effective
+     * immediately. Resolve the Golden version effective today.
+     */
+    const goldenTemplateVersion =
+      await this.goldenPayrollTemplate.getActiveVersionForDate(
+        effectiveFrom ?? new Date(),
+      );
+
+    const config = this.payrollConfigResolver.resolve(
+      goldenTemplateVersion.config,
+      companyConfig,
     );
 
     try {
@@ -180,7 +201,7 @@ export class CompanyPayrollSetupService {
           data: {
             companyPayrollSetupId: setup.id,
 
-            sourceTemplateVersionId: null,
+            sourceTemplateVersionId: goldenTemplateVersion.id,
 
             version: 1,
 
@@ -353,7 +374,7 @@ export class CompanyPayrollSetupService {
         ? currentVersion.effectiveTo
         : dayBeforeEffectiveFrom;
 
-    const config = this.buildPayrollSetupConfig(
+    const companyConfig = this.buildPayrollSetupConfig(
       input.standardWorkMinutesPerDay,
       input.philHealthDailyWorkerScheduleDaysPerWeek,
       {
@@ -364,6 +385,20 @@ export class CompanyPayrollSetupService {
         dailyRate: input.minimumWageDailyRate,
         rateEffectiveFrom: input.minimumWageRateEffectiveFrom,
       },
+    );
+
+    /*
+     * Resolve the Golden version effective on this company's new
+     * setup-version date. Historical setup versions remain frozen.
+     */
+    const goldenTemplateVersion =
+      await this.goldenPayrollTemplate.getActiveVersionForDate(
+        effectiveFrom,
+      );
+
+    const config = this.payrollConfigResolver.resolve(
+      goldenTemplateVersion.config,
+      companyConfig,
     );
 
     try {
@@ -382,7 +417,7 @@ export class CompanyPayrollSetupService {
           data: {
             companyPayrollSetupId: setup.id,
 
-            sourceTemplateVersionId: currentVersion.sourceTemplateVersionId,
+            sourceTemplateVersionId: goldenTemplateVersion.id,
 
             version: currentVersion.version + 1,
 
@@ -495,7 +530,7 @@ export class CompanyPayrollSetupService {
       dailyRate: string | undefined;
       rateEffectiveFrom: string | undefined;
     },
-  ): Prisma.InputJsonValue {
+  ): CompanyPayrollConfigOverlay {
     if (
       !Number.isInteger(standardWorkMinutesPerDay) ||
       standardWorkMinutesPerDay < 1 ||

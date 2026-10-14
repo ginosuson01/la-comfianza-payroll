@@ -17,6 +17,43 @@ import {
   getSemiMonthlyGovernmentContributionCodes,
 } from '../src/index.ts';
 
+const SSS_TEST_RULE = {
+  minimumMsc: '5000.00',
+  maximumMsc: '35000.00',
+  mscStep: '500.00',
+  mscMidpoint: '250.00',
+  regularSocialSecurityMaximumMsc: '20000.00',
+  employeeRate: '0.0500',
+  employerRate: '0.1000',
+  mandatoryProvidentFund: {
+    startsAboveMsc: '20000.00',
+    employeeRate: '0.0500',
+    employerRate: '0.1000',
+  },
+  employeesCompensation: {
+    thresholdMsc: '14500.00',
+    atOrBelowThresholdAmount: '10.00',
+    aboveThresholdAmount: '30.00',
+  },
+} as const;
+
+const PHILHEALTH_TEST_RULE = {
+  salaryFloor: '10000.00',
+  salaryCeiling: '100000.00',
+  premiumRate: '0.0500',
+  employeeShareRate: '0.5000',
+  employerShareRate: '0.5000',
+  oddCentavoRecipient: 'EMPLOYER',
+} as const;
+
+const PAGIBIG_TEST_RULE = {
+  maximumFundSalary: '10000.00',
+  employeeRateThreshold: '1500.00',
+  lowerEmployeeRate: '0.0100',
+  upperEmployeeRate: '0.0200',
+  employerRate: '0.0200',
+} as const;
+
 test(
   'defines the approved client payroll business policies',
   () => {
@@ -193,6 +230,7 @@ test(
     const result =
       calculateSssContribution(
         '10000.00',
+        SSS_TEST_RULE,
       );
 
     assert.equal(
@@ -233,6 +271,7 @@ test(
     assert.equal(
       calculateSssContribution(
         '5250.00',
+        SSS_TEST_RULE,
       ).monthlySalaryCredit,
 
       '5500.00',
@@ -241,6 +280,7 @@ test(
     assert.equal(
       calculateSssContribution(
         '34750.00',
+        SSS_TEST_RULE,
       ).monthlySalaryCredit,
 
       '35000.00',
@@ -254,6 +294,7 @@ test(
     const result =
       calculatePhilHealthContribution(
         '20000.00',
+        PHILHEALTH_TEST_RULE,
       );
 
     assert.equal(
@@ -279,6 +320,7 @@ test(
     assert.equal(
       calculatePhilHealthContribution(
         '5000.00',
+        PHILHEALTH_TEST_RULE,
       ).contributionBasis,
 
       '10000.00',
@@ -287,6 +329,7 @@ test(
     assert.equal(
       calculatePhilHealthContribution(
         '150000.00',
+        PHILHEALTH_TEST_RULE,
       ).contributionBasis,
 
       '100000.00',
@@ -300,6 +343,7 @@ test(
     const result =
       calculatePagIbigContribution(
         '15000.00',
+        PAGIBIG_TEST_RULE,
       );
 
     assert.equal(
@@ -325,6 +369,7 @@ test(
     const result =
       calculatePagIbigContribution(
         '1500.00',
+        PAGIBIG_TEST_RULE,
       );
 
     assert.equal(
@@ -754,6 +799,111 @@ test(
     assert.equal(
       schedule.secondCutoffDeduction,
       '625.00',
+    );
+  },
+);
+
+
+test(
+  'uses supplied SSS rule values instead of hidden statutory constants',
+  () => {
+    const result =
+      calculateSssContribution(
+        '10000.00',
+        {
+          ...SSS_TEST_RULE,
+          employeeRate: '0.0400',
+          employerRate: '0.0900',
+          employeesCompensation: {
+            ...SSS_TEST_RULE.employeesCompensation,
+            atOrBelowThresholdAmount: '12.00',
+          },
+        },
+      );
+
+    assert.equal(
+      result.employeeShare,
+      '400.00',
+    );
+
+    assert.equal(
+      result.employerSocialSecurityShare,
+      '900.00',
+    );
+
+    assert.equal(
+      result.employerEmployeesCompensationShare,
+      '12.00',
+    );
+  },
+);
+
+test(
+  'uses supplied PhilHealth rule values instead of hidden statutory constants',
+  () => {
+    const result =
+      calculatePhilHealthContribution(
+        '20000.00',
+        {
+          ...PHILHEALTH_TEST_RULE,
+          premiumRate: '0.0400',
+        },
+      );
+
+    assert.equal(
+      result.premiumRate,
+      '0.0400',
+    );
+
+    assert.equal(
+      result.totalPremium,
+      '800.00',
+    );
+
+    assert.equal(
+      result.employeeShare,
+      '400.00',
+    );
+
+    assert.equal(
+      result.employerShare,
+      '400.00',
+    );
+  },
+);
+
+test(
+  'uses supplied Pag-IBIG rule values instead of hidden statutory constants',
+  () => {
+    const result =
+      calculatePagIbigContribution(
+        '15000.00',
+        {
+          ...PAGIBIG_TEST_RULE,
+          maximumFundSalary: '8000.00',
+          upperEmployeeRate: '0.0150',
+          employerRate: '0.0250',
+        },
+      );
+
+    assert.equal(
+      result.monthlyFundSalary,
+      '8000.00',
+    );
+
+    assert.equal(
+      result.employeeRate,
+      '0.0150',
+    );
+
+    assert.equal(
+      result.employeeShare,
+      '120.00',
+    );
+
+    assert.equal(
+      result.employerShare,
+      '200.00',
     );
   },
 );

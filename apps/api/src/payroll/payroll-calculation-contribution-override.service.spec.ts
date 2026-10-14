@@ -4,6 +4,7 @@ import {
   type StatutoryPayrollTaxResolverContext,
 } from '@payroll/payroll-engine';
 
+import { createValidGoldenPayrollTemplateConfig } from '../companies/golden-payroll-template.test-fixture';
 import { PayrollCalculationService } from './payroll-calculation.service';
 
 import type { PayrollEmployeeInputAssembly } from './payroll-input.service';
@@ -102,7 +103,9 @@ function createAssembly(taxConfigured = true): PayrollEmployeeInputAssembly {
 
         standardWorkMinutesPerDay: 480,
 
-        configSnapshot: {},
+        configSnapshot: JSON.parse(
+          JSON.stringify(createValidGoldenPayrollTemplateConfig()),
+        ) as Record<string, unknown>,
       },
     },
   };

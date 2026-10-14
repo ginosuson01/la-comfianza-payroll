@@ -3,6 +3,8 @@ import {
   RATE_SCALE,
   divideRoundHalfUp,
   formatMoney,
+  formatRate,
+  multiplyFixedDecimals,
   parseMoney,
   parseRate,
   rescaleFixedDecimal,
@@ -489,6 +491,49 @@ export function calculatePhilippineNightDifferential(
  * ============================================================
  */
 
+export interface SssContributionRule {
+  minimumMsc: string;
+
+  maximumMsc: string;
+
+  mscStep: string;
+
+  mscMidpoint: string;
+
+  /*
+   * These fields are already part of the frozen Golden-derived
+   * statutory configuration.
+   *
+   * The current aggregate contribution result intentionally
+   * preserves the existing Step 20 behavior: employeeShare and
+   * employerSocialSecurityShare remain aggregate SSS shares.
+   *
+   * A later reporting refinement may expose Regular SS and MPF
+   * components separately without changing the frozen rule source.
+   */
+  regularSocialSecurityMaximumMsc: string;
+
+  employeeRate: string;
+
+  employerRate: string;
+
+  mandatoryProvidentFund: {
+    startsAboveMsc: string;
+
+    employeeRate: string;
+
+    employerRate: string;
+  };
+
+  employeesCompensation: {
+    thresholdMsc: string;
+
+    atOrBelowThresholdAmount: string;
+
+    aboveThresholdAmount: string;
+  };
+}
+
 export interface SssContributionResult {
   monthlyCompensation: string;
 
@@ -507,6 +552,7 @@ export interface SssContributionResult {
 
 export function calculateSssContribution(
   monthlyCompensation: string,
+  rule: SssContributionRule,
 ): SssContributionResult {
   const compensation =
     requireNonNegativeMoney(
@@ -514,28 +560,69 @@ export function calculateSssContribution(
       'SSS monthly compensation',
     );
 
-  /*
-   * 2025 table:
-   *
-   * minimum MSC = 5,000
-   * maximum MSC = 35,000
-   * brackets advance by 500, with midpoint
-   * compensation ranges.
-   */
   const minimumMsc =
-    parseMoney('5000.00');
+    requireNonNegativeMoney(
+      rule.minimumMsc,
+      'SSS minimum MSC',
+    );
 
   const maximumMsc =
-    parseMoney('35000.00');
+    requireNonNegativeMoney(
+      rule.maximumMsc,
+      'SSS maximum MSC',
+    );
 
   const step =
-    parseMoney('500.00');
+    requireNonNegativeMoney(
+      rule.mscStep,
+      'SSS MSC step',
+    );
 
-  const halfStep =
-    parseMoney('250.00');
+  const midpoint =
+    requireNonNegativeMoney(
+      rule.mscMidpoint,
+      'SSS MSC midpoint',
+    );
+
+  if (step <= 0n) {
+    throw new Error(
+      'SSS MSC step must be greater than zero.',
+    );
+  }
+
+  if (minimumMsc > maximumMsc) {
+    throw new Error(
+      'SSS minimum MSC must not exceed maximum MSC.',
+    );
+  }
+
+  /*
+   * Validate the already-frozen Regular SS / MPF rule data even
+   * though the current aggregate result does not yet expose the
+   * two components separately.
+   */
+  requireNonNegativeMoney(
+    rule.regularSocialSecurityMaximumMsc,
+    'SSS regular Social Security maximum MSC',
+  );
+
+  requireNonNegativeMoney(
+    rule.mandatoryProvidentFund.startsAboveMsc,
+    'SSS MPF starting MSC',
+  );
+
+  requireNonNegativeRate(
+    rule.mandatoryProvidentFund.employeeRate,
+    'SSS MPF employee rate',
+  );
+
+  requireNonNegativeRate(
+    rule.mandatoryProvidentFund.employerRate,
+    'SSS MPF employer rate',
+  );
 
   let msc =
-    ((compensation + halfStep) /
+    ((compensation + midpoint) /
       step) *
     step;
 
@@ -547,29 +634,58 @@ export function calculateSssContribution(
     msc = maximumMsc;
   }
 
-  /*
-   * Effective January 2025:
-   *
-   * employee = 5%
-   * employer = 10%
-   *
-   * EC is paid by employer only:
-   * 10.00 when MSC <= 14,500
-   * 30.00 when MSC >= 15,000
-   */
+  const employeeRate =
+    requireNonNegativeRate(
+      rule.employeeRate,
+      'SSS employee rate',
+    );
+
+  const employerRate =
+    requireNonNegativeRate(
+      rule.employerRate,
+      'SSS employer rate',
+    );
+
   const employeeShare =
-    percentageOfMoney(msc, 5n, 100n);
+    multiplyFixedDecimals(
+      msc,
+      MONEY_SCALE,
+      employeeRate,
+      RATE_SCALE,
+      MONEY_SCALE,
+    );
 
   const employerSocialSecurityShare =
-    percentageOfMoney(msc, 10n, 100n);
+    multiplyFixedDecimals(
+      msc,
+      MONEY_SCALE,
+      employerRate,
+      RATE_SCALE,
+      MONEY_SCALE,
+    );
 
   const ecThreshold =
-    parseMoney('14500.00');
+    requireNonNegativeMoney(
+      rule.employeesCompensation.thresholdMsc,
+      'SSS EC threshold MSC',
+    );
+
+  const ecAtOrBelow =
+    requireNonNegativeMoney(
+      rule.employeesCompensation.atOrBelowThresholdAmount,
+      'SSS EC amount at or below threshold',
+    );
+
+  const ecAbove =
+    requireNonNegativeMoney(
+      rule.employeesCompensation.aboveThresholdAmount,
+      'SSS EC amount above threshold',
+    );
 
   const employerEmployeesCompensationShare =
     msc <= ecThreshold
-      ? parseMoney('10.00')
-      : parseMoney('30.00');
+      ? ecAtOrBelow
+      : ecAbove;
 
   const employerTotal =
     employerSocialSecurityShare +
@@ -612,6 +728,22 @@ export function calculateSssContribution(
  * ============================================================
  */
 
+export interface PhilHealthContributionRule {
+  salaryFloor: string;
+
+  salaryCeiling: string;
+
+  premiumRate: string;
+
+  employeeShareRate: string;
+
+  employerShareRate: string;
+
+  oddCentavoRecipient:
+    | 'EMPLOYEE'
+    | 'EMPLOYER';
+}
+
 export interface PhilHealthContributionResult {
   monthlyBasicSalary: string;
 
@@ -628,6 +760,7 @@ export interface PhilHealthContributionResult {
 
 export function calculatePhilHealthContribution(
   monthlyBasicSalary: string,
+  rule: PhilHealthContributionRule,
 ): PhilHealthContributionResult {
   const salary =
     requireNonNegativeMoney(
@@ -636,10 +769,53 @@ export function calculatePhilHealthContribution(
     );
 
   const floor =
-    parseMoney('10000.00');
+    requireNonNegativeMoney(
+      rule.salaryFloor,
+      'PhilHealth salary floor',
+    );
 
   const ceiling =
-    parseMoney('100000.00');
+    requireNonNegativeMoney(
+      rule.salaryCeiling,
+      'PhilHealth salary ceiling',
+    );
+
+  if (floor > ceiling) {
+    throw new Error(
+      'PhilHealth salary floor must not exceed salary ceiling.',
+    );
+  }
+
+  const premiumRate =
+    requireNonNegativeRate(
+      rule.premiumRate,
+      'PhilHealth premium rate',
+    );
+
+  const employeeShareRate =
+    requireNonNegativeRate(
+      rule.employeeShareRate,
+      'PhilHealth employee share rate',
+    );
+
+  const employerShareRate =
+    requireNonNegativeRate(
+      rule.employerShareRate,
+      'PhilHealth employer share rate',
+    );
+
+  const oneRate =
+    10n ** BigInt(RATE_SCALE);
+
+  if (
+    employeeShareRate +
+      employerShareRate !==
+    oneRate
+  ) {
+    throw new Error(
+      'PhilHealth employee and employer share rates must total 1.0000.',
+    );
+  }
 
   const basis =
     salary < floor
@@ -648,28 +824,46 @@ export function calculatePhilHealthContribution(
         ? ceiling
         : salary;
 
-  /*
-   * Current rate = 5%.
-   */
   const totalPremium =
-    percentageOfMoney(
+    multiplyFixedDecimals(
       basis,
-      5n,
-      100n,
+      MONEY_SCALE,
+      premiumRate,
+      RATE_SCALE,
+      MONEY_SCALE,
     );
 
   /*
-   * Divide equally.
+   * Allocate the indivisible centavo to the configured recipient.
    *
-   * If the total has an odd centavo, the employer
-   * receives the excess centavo.
+   * For the current Philippine rule the employer receives the
+   * excess centavo, preserving the existing calculation behavior.
    */
-  const employeeShare =
-    totalPremium / 2n;
+  let employeeShare: bigint;
+  let employerShare: bigint;
 
-  const employerShare =
-    totalPremium -
-    employeeShare;
+  if (
+    rule.oddCentavoRecipient ===
+    'EMPLOYER'
+  ) {
+    employeeShare =
+      (totalPremium *
+        employeeShareRate) /
+      oneRate;
+
+    employerShare =
+      totalPremium -
+      employeeShare;
+  } else {
+    employerShare =
+      (totalPremium *
+        employerShareRate) /
+      oneRate;
+
+    employeeShare =
+      totalPremium -
+      employerShare;
+  }
 
   return {
     monthlyBasicSalary:
@@ -679,7 +873,7 @@ export function calculatePhilHealthContribution(
       formatMoney(basis),
 
     premiumRate:
-      '0.0500',
+      formatRate(premiumRate),
 
     totalPremium:
       formatMoney(totalPremium),
@@ -697,6 +891,18 @@ export function calculatePhilHealthContribution(
  * PAG-IBIG / HDMF
  * ============================================================
  */
+
+export interface PagIbigContributionRule {
+  maximumFundSalary: string;
+
+  employeeRateThreshold: string;
+
+  lowerEmployeeRate: string;
+
+  upperEmployeeRate: string;
+
+  employerRate: string;
+}
 
 export interface PagIbigContributionResult {
   monthlyCompensation: string;
@@ -716,6 +922,7 @@ export interface PagIbigContributionResult {
 
 export function calculatePagIbigContribution(
   monthlyCompensation: string,
+  rule: PagIbigContributionRule,
 ): PagIbigContributionResult {
   const compensation =
     requireNonNegativeMoney(
@@ -724,33 +931,61 @@ export function calculatePagIbigContribution(
     );
 
   const maximumFundSalary =
-    parseMoney('10000.00');
+    requireNonNegativeMoney(
+      rule.maximumFundSalary,
+      'Pag-IBIG maximum fund salary',
+    );
 
-  const onePercentThreshold =
-    parseMoney('1500.00');
+  const employeeRateThreshold =
+    requireNonNegativeMoney(
+      rule.employeeRateThreshold,
+      'Pag-IBIG employee rate threshold',
+    );
+
+  const lowerEmployeeRate =
+    requireNonNegativeRate(
+      rule.lowerEmployeeRate,
+      'Pag-IBIG lower employee rate',
+    );
+
+  const upperEmployeeRate =
+    requireNonNegativeRate(
+      rule.upperEmployeeRate,
+      'Pag-IBIG upper employee rate',
+    );
+
+  const employerRate =
+    requireNonNegativeRate(
+      rule.employerRate,
+      'Pag-IBIG employer rate',
+    );
 
   const fundSalary =
     compensation > maximumFundSalary
       ? maximumFundSalary
       : compensation;
 
-  const employeePercent =
-    compensation <= onePercentThreshold
-      ? 1n
-      : 2n;
+  const employeeRate =
+    compensation <= employeeRateThreshold
+      ? lowerEmployeeRate
+      : upperEmployeeRate;
 
   const employeeShare =
-    percentageOfMoney(
+    multiplyFixedDecimals(
       fundSalary,
-      employeePercent,
-      100n,
+      MONEY_SCALE,
+      employeeRate,
+      RATE_SCALE,
+      MONEY_SCALE,
     );
 
   const employerShare =
-    percentageOfMoney(
+    multiplyFixedDecimals(
       fundSalary,
-      2n,
-      100n,
+      MONEY_SCALE,
+      employerRate,
+      RATE_SCALE,
+      MONEY_SCALE,
     );
 
   return {
@@ -761,12 +996,10 @@ export function calculatePagIbigContribution(
       formatMoney(fundSalary),
 
     employeeRate:
-      employeePercent === 1n
-        ? '0.0100'
-        : '0.0200',
+      formatRate(employeeRate),
 
     employerRate:
-      '0.0200',
+      formatRate(employerRate),
 
     employeeShare:
       formatMoney(employeeShare),
@@ -1609,6 +1842,22 @@ function requireNonNegativeMoney(
   }
 
   return amount;
+}
+
+function requireNonNegativeRate(
+  value: string,
+  fieldName: string,
+): bigint {
+  const rate =
+    parseRate(value);
+
+  if (rate < 0n) {
+    throw new Error(
+      `${fieldName} must not be negative.`,
+    );
+  }
+
+  return rate;
 }
 
 function percentageOfMoney(

@@ -92,6 +92,17 @@ function minimumWageConfig() {
 
         rateEffectiveFrom: '2026-01-01',
       },
+
+      tax: {
+        withholding: {
+          effectiveFrom: '2023-01-01',
+
+          rules: {
+            SEMI_MONTHLY:
+              getBirWithholdingTaxRule('SEMI_MONTHLY'),
+          },
+        },
+      },
     },
   };
 }
@@ -336,4 +347,110 @@ describe('Philippine withholding-tax policy', () => {
 
     expect(result.taxResolver).toBeNull();
   });
+
+  it('uses the SEMI_MONTHLY withholding rule from the frozen config snapshot', () => {
+    const configSnapshot = minimumWageConfig();
+
+    const customRule = {
+      method: 'PROGRESSIVE_TABLE' as const,
+
+      brackets: [
+        {
+          minInclusive: '0.00',
+
+          maxExclusive: '1000.00',
+
+          baseTax: '123.00',
+
+          rateOnExcess: '0.0000',
+        },
+
+        {
+          minInclusive: '1000.00',
+
+          maxExclusive: null,
+
+          baseTax: '456.00',
+
+          rateOnExcess: '0.1000',
+        },
+      ],
+    };
+
+    configSnapshot.statutory.tax.withholding.rules.SEMI_MONTHLY =
+      customRule;
+
+    const result = buildPhilippineWithholdingTaxResolver({
+      payBasis: 'DAILY',
+
+      baseRate: '650.0000',
+
+      cutoffStartDate: '2026-09-16',
+
+      cutoffEndDate: '2026-09-30',
+
+      configSnapshot,
+
+      corePayroll: corePayroll([earning()]),
+    });
+
+    expect(result.ready).toBe(true);
+
+    const tax = result.taxResolver?.({
+      corePayroll: corePayroll([earning()]),
+
+      governmentContributionsTotal: '100.00',
+
+      employerGovernmentContributionsTotal: '200.00',
+    });
+
+    expect(tax?.treatment).toBe('APPLY');
+
+    if (tax?.treatment === 'APPLY') {
+      expect(tax.rule).toEqual(customRule);
+
+      expect(tax.rule).not.toEqual(
+        getBirWithholdingTaxRule('SEMI_MONTHLY'),
+      );
+    }
+  });
+
+  it('rejects a resolved employee when the frozen snapshot is missing the withholding schedule', () => {
+    const configSnapshot = {
+      statutory: {
+        minimumWage: {
+          regionCode: 'IVA',
+
+          wageOrderCode: 'SYNTHETIC-WAGE-ORDER',
+
+          areaClassification: 'Synthetic area classification',
+
+          sector: 'Synthetic sector',
+
+          dailyRate: '600.00',
+
+          rateEffectiveFrom: '2026-01-01',
+        },
+      },
+    };
+
+    expect(() =>
+      buildPhilippineWithholdingTaxResolver({
+        payBasis: 'DAILY',
+
+        baseRate: '650.0000',
+
+        cutoffStartDate: '2026-09-16',
+
+        cutoffEndDate: '2026-09-30',
+
+        configSnapshot,
+
+        corePayroll: corePayroll([earning()]),
+      }),
+    ).toThrow(
+      /Philippine tax configuration must be present as an object/,
+    );
+  });
+
 });

@@ -1,7 +1,7 @@
 import {
-  getBirWithholdingTaxRule,
   type CorePayrollCalculationResult,
   type PayrollCalculationInput,
+  type ProgressiveWithholdingTaxRule,
   type StatutoryPayrollTaxResolver,
 } from '@payroll/payroll-engine';
 
@@ -49,6 +49,54 @@ export interface PhilippineWithholdingTaxResolverResolution {
   issues: readonly PhilippineWithholdingPolicyIssue[];
 
   taxResolver: StatutoryPayrollTaxResolver | null;
+}
+
+function readSemiMonthlyWithholdingRule(
+  configSnapshot: Readonly<Record<string, unknown>>,
+): ProgressiveWithholdingTaxRule {
+  const statutory = requireObject(
+    configSnapshot['statutory'],
+    'Company statutory payroll configuration',
+  );
+
+  const tax = requireObject(
+    statutory['tax'],
+    'Philippine tax configuration',
+  );
+
+  const withholding = requireObject(
+    tax['withholding'],
+    'Philippine withholding-tax configuration',
+  );
+
+  const rules = requireObject(
+    withholding['rules'],
+    'Philippine withholding-tax rules',
+  );
+
+  const semiMonthly = requireObject(
+    rules['SEMI_MONTHLY'],
+    'Philippine semi-monthly withholding-tax rule',
+  );
+
+  return semiMonthly as unknown as ProgressiveWithholdingTaxRule;
+}
+
+function requireObject(
+  value: unknown,
+  fieldName: string,
+): Readonly<Record<string, unknown>> {
+  if (
+    value === null ||
+    Array.isArray(value) ||
+    typeof value !== 'object'
+  ) {
+    throw new Error(
+      `${fieldName} must be present as an object in the frozen payroll configuration snapshot.`,
+    );
+  }
+
+  return value as Readonly<Record<string, unknown>>;
 }
 
 export function buildPhilippineWithholdingTaxResolver(
@@ -145,6 +193,10 @@ export function buildPhilippineWithholdingTaxResolver(
 
   const classification = wageClassification.classification;
 
+  const withholdingRule = readSemiMonthlyWithholdingRule(
+    input.configSnapshot,
+  );
+
   const taxResolver: StatutoryPayrollTaxResolver = (context) => {
     const taxableCompensation = resolvePhilippineTaxableCompensation(
       classification,
@@ -174,7 +226,7 @@ export function buildPhilippineWithholdingTaxResolver(
 
       taxableCompensation: taxableCompensation.taxableCompensation,
 
-      rule: getBirWithholdingTaxRule('SEMI_MONTHLY'),
+      rule: withholdingRule,
     };
   };
 

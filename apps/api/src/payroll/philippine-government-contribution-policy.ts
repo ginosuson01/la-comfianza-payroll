@@ -5,6 +5,9 @@ import {
   getSemiMonthlyGovernmentContributionCodes,
   type GovernmentContributionCode,
   type GovernmentContributionResolution,
+  type PagIbigContributionRule,
+  type PhilHealthContributionRule,
+  type SssContributionRule,
 } from '@payroll/payroll-engine';
 
 import type { SemiMonthlyCutoffPosition } from './payroll-cutoff-period.service';
@@ -55,11 +58,15 @@ export interface BuildPhilippineGovernmentContributionInput {
   cutoffPosition: SemiMonthlyCutoffPosition;
 
   basis: PhilippineGovernmentContributionBasis;
+
+  configSnapshot: Readonly<Record<string, unknown>>;
 }
 
 export function buildPhilippineGovernmentContributionResolutions(
   input: BuildPhilippineGovernmentContributionInput,
 ): readonly GovernmentContributionResolution[] {
+  const rules = readContributionRules(input.configSnapshot);
+
   const collectedCodes = new Set<GovernmentContributionCode>(
     getSemiMonthlyGovernmentContributionCodes(input.cutoffPosition),
   );
@@ -87,6 +94,8 @@ export function buildPhilippineGovernmentContributionResolutions(
 
             'SSS monthly compensation',
           ),
+
+          rules.sss,
         );
 
       case 'PHILHEALTH':
@@ -96,6 +105,8 @@ export function buildPhilippineGovernmentContributionResolutions(
 
             'PhilHealth monthly basic salary',
           ),
+
+          rules.philHealth,
         );
 
       case 'PAGIBIG':
@@ -105,6 +116,8 @@ export function buildPhilippineGovernmentContributionResolutions(
 
             'Pag-IBIG monthly compensation',
           ),
+
+          rules.pagIbig,
         );
     }
   });
@@ -112,8 +125,12 @@ export function buildPhilippineGovernmentContributionResolutions(
 
 function buildSssResolution(
   monthlyCompensation: string,
+  rule: SssContributionRule,
 ): GovernmentContributionResolution {
-  const result = calculateSssContribution(monthlyCompensation);
+  const result = calculateSssContribution(
+    monthlyCompensation,
+    rule,
+  );
 
   return {
     treatment: 'APPLY',
@@ -140,8 +157,12 @@ function buildSssResolution(
 
 function buildPhilHealthResolution(
   monthlyBasicSalary: string,
+  rule: PhilHealthContributionRule,
 ): GovernmentContributionResolution {
-  const result = calculatePhilHealthContribution(monthlyBasicSalary);
+  const result = calculatePhilHealthContribution(
+    monthlyBasicSalary,
+    rule,
+  );
 
   return {
     treatment: 'APPLY',
@@ -164,8 +185,12 @@ function buildPhilHealthResolution(
 
 function buildPagIbigResolution(
   monthlyCompensation: string,
+  rule: PagIbigContributionRule,
 ): GovernmentContributionResolution {
-  const result = calculatePagIbigContribution(monthlyCompensation);
+  const result = calculatePagIbigContribution(
+    monthlyCompensation,
+    rule,
+  );
 
   return {
     treatment: 'APPLY',
@@ -184,6 +209,57 @@ function buildPagIbigResolution(
       employerAmount: result.employerShare,
     },
   };
+}
+
+interface PhilippineGovernmentContributionRules {
+  sss: SssContributionRule;
+
+  philHealth: PhilHealthContributionRule;
+
+  pagIbig: PagIbigContributionRule;
+}
+
+function readContributionRules(
+  configSnapshot: Readonly<Record<string, unknown>>,
+): PhilippineGovernmentContributionRules {
+  const statutory = requireObject(
+    configSnapshot['statutory'],
+    'Company statutory payroll configuration',
+  );
+
+  return {
+    sss: requireObject(
+      statutory['sss'],
+      'SSS statutory configuration',
+    ) as unknown as SssContributionRule,
+
+    philHealth: requireObject(
+      statutory['philHealth'],
+      'PhilHealth statutory configuration',
+    ) as unknown as PhilHealthContributionRule,
+
+    pagIbig: requireObject(
+      statutory['pagIbig'],
+      'Pag-IBIG statutory configuration',
+    ) as unknown as PagIbigContributionRule,
+  };
+}
+
+function requireObject(
+  value: unknown,
+  fieldName: string,
+): Readonly<Record<string, unknown>> {
+  if (
+    value === null ||
+    Array.isArray(value) ||
+    typeof value !== 'object'
+  ) {
+    throw new Error(
+      `${fieldName} must be present as an object in the frozen payroll configuration snapshot.`,
+    );
+  }
+
+  return value as Readonly<Record<string, unknown>>;
 }
 
 function requireBasis(value: string | undefined, fieldName: string): string {

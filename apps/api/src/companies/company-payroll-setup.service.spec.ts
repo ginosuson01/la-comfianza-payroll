@@ -13,6 +13,9 @@ import {
   CompanyPayrollSetupAuditAction,
 } from './company-payroll-setup-audit.constants';
 import { CompanyPayrollSetupService } from './company-payroll-setup.service';
+import { CompanyPayrollConfigResolverService } from './company-payroll-config-resolver.service';
+import type { GoldenPayrollTemplateService } from './golden-payroll-template.service';
+import { createValidGoldenPayrollTemplateConfig } from './golden-payroll-template.test-fixture';
 
 describe('CompanyPayrollSetupService', () => {
   const actorUserId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -127,8 +130,34 @@ describe('CompanyPayrollSetupService', () => {
       recordSuccessInTransaction,
     } as unknown as AuditLogService;
 
+    const getActiveVersionForDate = jest.fn().mockResolvedValue({
+      id: '44444444-4444-4444-8444-444444444444',
+      payrollTemplateId: '55555555-5555-4555-8555-555555555555',
+      templateCode: 'PH_STANDARD_PAYROLL',
+      templateName: 'Philippine Standard Payroll',
+      version: 1,
+      name: 'Philippine Standard Payroll — Test Baseline',
+      status: ConfigStatus.ACTIVE,
+      effectiveFrom: new Date('2026-01-06T00:00:00.000Z'),
+      effectiveTo: null,
+      config: createValidGoldenPayrollTemplateConfig(),
+      createdAt: new Date('2026-01-06T00:00:00.000Z'),
+    });
+
+    const goldenPayrollTemplate = {
+      getActiveVersionForDate,
+    } as unknown as GoldenPayrollTemplateService;
+
+    const payrollConfigResolver =
+      new CompanyPayrollConfigResolverService();
+
     return {
-      service: new CompanyPayrollSetupService(prisma, auditLog),
+      service: new CompanyPayrollSetupService(
+        prisma,
+        auditLog,
+        goldenPayrollTemplate,
+        payrollConfigResolver,
+      ),
 
       companyFindUnique,
       setupFindUnique,
@@ -256,15 +285,38 @@ describe('CompanyPayrollSetupService', () => {
       data: {
         companyPayrollSetupId: setupId,
 
-        sourceTemplateVersionId: null,
+        sourceTemplateVersionId: '44444444-4444-4444-8444-444444444444',
 
         version: 1,
 
-        config: {
+        config: expect.objectContaining({
+          schemaVersion: 1,
+          jurisdiction: 'PH',
+
           attendance: {
             standardWorkMinutesPerDay: 480,
           },
-        },
+
+          statutory: expect.objectContaining({
+            sss: expect.objectContaining({
+              maximumMsc: '35000.00',
+            }),
+
+            philHealth: expect.objectContaining({
+              premiumRate: '0.0500',
+            }),
+
+            pagIbig: expect.objectContaining({
+              maximumFundSalary: '10000.00',
+            }),
+
+            tax: expect.any(Object),
+
+            premium: expect.objectContaining({
+              nightDifferentialRate: '0.1000',
+            }),
+          }),
+        }),
 
         status: ConfigStatus.ACTIVE,
 
@@ -386,15 +438,16 @@ describe('CompanyPayrollSetupService', () => {
     expect(setupVersionCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          config: {
+          config: expect.objectContaining({
             attendance: {
               standardWorkMinutesPerDay: 480,
             },
 
-            statutory: {
-              philHealth: {
+            statutory: expect.objectContaining({
+              philHealth: expect.objectContaining({
+                premiumRate: '0.0500',
                 dailyWorkerScheduleDaysPerWeek: 5,
-              },
+              }),
 
               minimumWage: {
                 regionCode: 'IVA',
@@ -409,8 +462,8 @@ describe('CompanyPayrollSetupService', () => {
 
                 rateEffectiveFrom: '2026-01-01',
               },
-            },
-          },
+            }),
+          }),
         }) as unknown,
       }),
     );
@@ -438,22 +491,23 @@ describe('CompanyPayrollSetupService', () => {
     expect(setupVersionCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          config: {
+          config: expect.objectContaining({
             attendance: {
               standardWorkMinutesPerDay: 480,
             },
 
-            statutory: {
-              philHealth: {
+            statutory: expect.objectContaining({
+              philHealth: expect.objectContaining({
+                premiumRate: '0.0500',
                 dailyWorkerScheduleDaysPerWeek: 5,
-              },
+              }),
 
               minimumWage: {
                 dailyRate: '600.00',
                 rateEffectiveFrom: '2026-01-01',
               },
-            },
-          },
+            }),
+          }),
         }) as unknown,
       }),
     );
