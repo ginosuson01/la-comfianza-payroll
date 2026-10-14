@@ -426,6 +426,9 @@ export class PayrollGenerationService {
         configSnapshot:
           preflight.configSnapshot as unknown as Prisma.InputJsonValue,
 
+        companySnapshot:
+          preflight.company as unknown as Prisma.InputJsonValue,
+
         totalGross: preflight.totals.totalGross,
 
         totalNet: preflight.totals.totalNetBeforeStatusTreatment,

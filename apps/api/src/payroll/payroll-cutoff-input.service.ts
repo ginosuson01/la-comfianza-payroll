@@ -32,6 +32,24 @@ export interface PayrollCutoffReadinessIssue {
   message: string;
 }
 
+export interface PayrollCompanySnapshot {
+  id: string;
+  code: string;
+  name: string;
+
+  addressLine1: string | null;
+  addressLine2: string | null;
+  barangay: string | null;
+  city: string | null;
+  province: string | null;
+  postalCode: string | null;
+  country: string;
+
+  contactName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+}
+
 export interface PayrollCutoffCollectionSnapshot {
   id: string;
 
@@ -46,6 +64,8 @@ export interface PayrollCutoffInputCollection {
   companyId: string;
 
   payrollCutoffId: string;
+
+  company: PayrollCompanySnapshot;
 
   cutoff: PayrollCutoffCollectionSnapshot;
 
@@ -104,6 +124,26 @@ export class PayrollCutoffInputService {
         payDate: true,
 
         status: true,
+
+        company: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+
+            addressLine1: true,
+            addressLine2: true,
+            barangay: true,
+            city: true,
+            province: true,
+            postalCode: true,
+            country: true,
+
+            contactName: true,
+            contactEmail: true,
+            contactPhone: true,
+          },
+        },
       },
     });
 
@@ -365,6 +405,8 @@ export class PayrollCutoffInputService {
       companyId,
 
       payrollCutoffId,
+
+      company: cutoff.company,
 
       cutoff: {
         id: cutoff.id,

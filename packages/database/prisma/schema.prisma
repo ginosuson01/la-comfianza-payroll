@@ -1033,6 +1033,9 @@ model PayrollRun {
   // Frozen configuration used for this exact payroll run.
   configSnapshot Json @db.JsonB
 
+  // Frozen company profile used for historical payslips and reports.
+  companySnapshot Json? @db.JsonB
+
   totalGross         Decimal  @default(0) @db.Decimal(18, 2)
   totalNet           Decimal  @default(0) @db.Decimal(18, 2)
   clientPayableGross Decimal? @db.Decimal(18, 2)

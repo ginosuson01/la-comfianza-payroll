@@ -18,6 +18,7 @@ import { buildPhilippineWithholdingTaxResolver } from './philippine-withholding-
 
 import {
   PayrollCutoffInputService,
+  type PayrollCompanySnapshot,
   type PayrollCutoffCollectionSnapshot,
   type PayrollCutoffReadinessIssue,
 } from './payroll-cutoff-input.service';
@@ -57,6 +58,8 @@ export interface PayrollCutoffCalculationPreflight {
   companyId: string;
 
   payrollCutoffId: string;
+
+  company: PayrollCompanySnapshot;
 
   cutoff: PayrollCutoffCollectionSnapshot;
 
@@ -114,6 +117,8 @@ export class PayrollCutoffCalculationService {
         companyId,
 
         payrollCutoffId,
+
+        company: collected.company,
 
         cutoff: collected.cutoff,
 
@@ -277,6 +282,8 @@ export class PayrollCutoffCalculationService {
       companyId,
 
       payrollCutoffId,
+
+      company: collected.company,
 
       cutoff: collected.cutoff,
 

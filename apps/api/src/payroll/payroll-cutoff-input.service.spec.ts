@@ -113,6 +113,24 @@ function createFixture() {
         payDate: new Date('2026-09-25T00:00:00.000Z'),
 
         status: PayrollCutoffStatus.OPEN,
+
+        company: {
+          id: 'company-1',
+          code: 'COMPANY-1',
+          name: 'Test Company',
+
+          addressLine1: '123 Test Street',
+          addressLine2: null,
+          barangay: 'Test Barangay',
+          city: 'Quezon City',
+          province: 'Metro Manila',
+          postalCode: '1100',
+          country: 'Philippines',
+
+          contactName: 'Test Contact',
+          contactEmail: 'payroll@testcompany.example',
+          contactPhone: '+639171234567',
+        },
       }),
     },
 
@@ -185,6 +203,24 @@ describe('PayrollCutoffInputService', () => {
     expect(result.assembledEmployeeCount).toBe(1);
 
     expect(result.issues).toEqual([]);
+
+    expect(result.company).toEqual({
+      id: 'company-1',
+      code: 'COMPANY-1',
+      name: 'Test Company',
+
+      addressLine1: '123 Test Street',
+      addressLine2: null,
+      barangay: 'Test Barangay',
+      city: 'Quezon City',
+      province: 'Metro Manila',
+      postalCode: '1100',
+      country: 'Philippines',
+
+      contactName: 'Test Contact',
+      contactEmail: 'payroll@testcompany.example',
+      contactPhone: '+639171234567',
+    });
 
     expect(result.employees).toHaveLength(1);
 

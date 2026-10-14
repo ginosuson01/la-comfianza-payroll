@@ -105,6 +105,24 @@ function createCollection(
 
     payrollCutoffId: 'cutoff-1',
 
+    company: {
+      id: 'company-1',
+      code: 'COMPANY-1',
+      name: 'Test Company',
+
+      addressLine1: '123 Test Street',
+      addressLine2: null,
+      barangay: 'Test Barangay',
+      city: 'Quezon City',
+      province: 'Metro Manila',
+      postalCode: '1100',
+      country: 'Philippines',
+
+      contactName: 'Test Contact',
+      contactEmail: 'payroll@testcompany.example',
+      contactPhone: '+639171234567',
+    },
+
     cutoff: {
       id: 'cutoff-1',
 
