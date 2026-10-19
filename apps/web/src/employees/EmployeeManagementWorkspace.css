@@ -725,3 +725,108 @@
   color: #667085;
   font-size: 11px;
 }
+
+.employee-recurring-payroll-panel {
+  width: 100%;
+}
+
+.employee-recurring-payroll-empty {
+  padding: 14px 0;
+  color: #667085;
+  font-size: 12px;
+}
+
+.employee-recurring-payroll-list {
+  display: grid;
+  gap: 10px;
+}
+
+.employee-recurring-payroll-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.employee-recurring-payroll-item-summary {
+  display: grid;
+  gap: 4px;
+}
+
+.employee-recurring-payroll-item-summary strong {
+  color: #172033;
+  font-size: 12px;
+}
+
+.employee-recurring-payroll-item-summary span,
+.employee-recurring-payroll-item-summary small {
+  color: #667085;
+  font-size: 11px;
+}
+
+.employee-recurring-payroll-correction {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.employee-recurring-payroll-correction select {
+  min-width: 150px;
+}
+
+.employee-recurring-payroll-form-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.employee-recurring-payroll-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.employee-recurring-payroll-form-grid label > span {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.employee-recurring-payroll-form-grid input,
+.employee-recurring-payroll-form-grid select {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.employee-recurring-payroll-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 850px) {
+  .employee-recurring-payroll-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-recurring-payroll-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .employee-recurring-payroll-correction {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .employee-recurring-payroll-correction select,
+  .employee-recurring-payroll-correction button {
+    width: 100%;
+  }
+}

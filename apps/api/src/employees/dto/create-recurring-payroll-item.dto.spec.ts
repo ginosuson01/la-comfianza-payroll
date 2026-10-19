@@ -2,7 +2,10 @@ import 'reflect-metadata';
 
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { RecurringPayrollItemKind } from '@payroll/database';
+import {
+  PayrollStatutoryBasisTreatment,
+  RecurringPayrollItemKind,
+} from '@payroll/database';
 
 import { CreateRecurringPayrollItemDto } from './create-recurring-payroll-item.dto';
 
@@ -14,6 +17,8 @@ describe('CreateRecurringPayrollItemDto', () => {
       description: ' Rice Allowance ',
       amount: 1500,
       taxable: false,
+      pagIbigFundSalaryTreatment:
+        PayrollStatutoryBasisTreatment.INCLUDE,
       effectiveFrom: '2026-09-15',
     });
 
@@ -73,6 +78,21 @@ describe('CreateRecurringPayrollItemDto', () => {
       code: 'RICE',
       description: 'Rice Allowance',
       amount: 1500.123,
+      effectiveFrom: '2026-09-15',
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('rejects an invalid Pag-IBIG Fund Salary treatment', async () => {
+    const dto = plainToInstance(CreateRecurringPayrollItemDto, {
+      kind: RecurringPayrollItemKind.ALLOWANCE,
+      code: 'RICE',
+      description: 'Rice Allowance',
+      amount: 1500,
+      pagIbigFundSalaryTreatment: 'MAYBE',
       effectiveFrom: '2026-09-15',
     });
 

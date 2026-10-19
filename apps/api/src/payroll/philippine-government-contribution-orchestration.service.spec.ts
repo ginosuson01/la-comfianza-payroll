@@ -180,10 +180,14 @@ function createMonthlyBasis(
 
     openingGrossPayProvided: false,
 
+    openingPagIbigMonthlyCompensationProvided: false,
+
     opening: {
       basicPay: '0.00',
 
       grossPay: '0.00',
+
+      pagIbigMonthlyCompensation: '0.00',
 
       contributionAmounts: {
         SSS: '0.00',
@@ -218,6 +222,10 @@ function createMonthlyBasis(
 
         grossPay: '0.00',
 
+        pagIbigMonthlyCompensation: '0.00',
+
+        pagIbigIssues: [],
+
         contributionAmounts: {
           SSS: '0.00',
 
@@ -233,6 +241,10 @@ function createMonthlyBasis(
 
       grossPay: '0.00',
 
+      pagIbigMonthlyCompensation: '0.00',
+
+      pagIbigIssues: [],
+
       contributionAmounts: {
         SSS: '0.00',
 
@@ -246,12 +258,20 @@ function createMonthlyBasis(
       basicPay: grossPay,
 
       grossPay,
+
+      pagIbigMonthlyCompensation: null,
     },
 
     monthly: {
       basicPay: grossPay,
 
       grossPay,
+
+      pagIbigMonthlyCompensation: null,
+
+      pagIbigIssues: [
+        'Current cutoff Pag-IBIG monthly compensation has not been resolved.',
+      ],
 
       contributionAmountsAlreadyCollected: {
         SSS: '0.00',
@@ -328,6 +348,16 @@ describe('PhilippineGovernmentContributionOrchestrationService', () => {
 
     expect(result.issues).toEqual([]);
 
+    expect(resolveMonthlyBasis).toHaveBeenCalledWith(
+      expect.objectContaining({
+        current: {
+          basicPay: '2400.00',
+          grossPay: '2400.00',
+          pagIbigMonthlyCompensation: '0.00',
+        },
+      }),
+    );
+
     expect(result.contributions).toHaveLength(3);
 
     expect(result.contributions[0]).toEqual(
@@ -358,6 +388,63 @@ describe('PhilippineGovernmentContributionOrchestrationService', () => {
       expect.objectContaining({
         treatment: 'DEFERRED',
 
+        code: 'PAGIBIG',
+      }),
+    );
+  });
+
+  it('preserves current Pag-IBIG classification issues without blocking SECOND-cutoff SSS', async () => {
+    const corePayroll = createCorePayroll('2400.00', '2900.00');
+
+    corePayroll.lineItems = [
+      {
+        category: 'EARNING',
+        code: 'LEGACY_ALLOWANCE',
+        description: 'Legacy Allowance',
+        quantity: null,
+        rate: null,
+        amount: '500.00',
+        taxable: false,
+        metadata: {
+          source: 'RECURRING_PAYROLL_ITEM',
+          recurringItemKind: 'ALLOWANCE',
+          pagIbigFundSalaryTreatment: null,
+        },
+      },
+    ];
+
+    calculateEmployeeCore.mockReturnValue(corePayroll);
+
+    resolveMonthlyBasis.mockResolvedValue(createMonthlyBasis('2900.00', 0));
+
+    const result = await service.resolveSecondCutoff(
+      createAssembly('2026-09-18'),
+    );
+
+    expect(result.ready).toBe(true);
+
+    expect(resolveMonthlyBasis).toHaveBeenCalledWith(
+      expect.objectContaining({
+        current: {
+          basicPay: '2400.00',
+          grossPay: '2900.00',
+          pagIbigIssues: [
+            'Pag-IBIG Fund Salary treatment is unresolved for recurring earning LEGACY_ALLOWANCE.',
+          ],
+        },
+      }),
+    );
+
+    expect(result.contributions[0]).toEqual(
+      expect.objectContaining({
+        treatment: 'APPLY',
+        code: 'SSS',
+      }),
+    );
+
+    expect(result.contributions[2]).toEqual(
+      expect.objectContaining({
+        treatment: 'DEFERRED',
         code: 'PAGIBIG',
       }),
     );

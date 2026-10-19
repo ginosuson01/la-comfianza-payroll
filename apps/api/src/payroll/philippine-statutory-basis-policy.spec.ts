@@ -1,8 +1,228 @@
 import {
+  resolvePagIbigFundSalaryComponentTreatment,
+  resolvePagIbigFundSalaryComponents,
   resolvePhilHealthMonthlyBasicSalary,
   resolveSssMonthlyCompensation,
   resolveSssMonthlyCompensationCompleteness,
 } from './philippine-statutory-basis-policy';
+
+import type { PayrollComputedLineItem } from '@payroll/payroll-engine';
+
+describe('Pag-IBIG Fund Salary policy', () => {
+  function lineItem(
+    overrides: Partial<PayrollComputedLineItem> = {},
+  ): PayrollComputedLineItem {
+    return {
+      category: 'EARNING',
+      code: 'BASIC_PAY',
+      description: 'Basic Pay',
+      quantity: null,
+      rate: null,
+      amount: '5000.00',
+      taxable: null,
+      metadata: {
+        source: 'ATTENDANCE_REGULAR_MINUTES',
+      },
+      ...overrides,
+    };
+  }
+
+  it('includes known system-generated earnings', () => {
+    expect(resolvePagIbigFundSalaryComponentTreatment(lineItem())).toEqual({
+      treatment: 'INCLUDE',
+      reason: null,
+    });
+  });
+
+  it('honors INCLUDE for a recurring allowance', () => {
+    expect(
+      resolvePagIbigFundSalaryComponentTreatment(
+        lineItem({
+          code: 'MEAL_ALLOWANCE',
+          amount: '1000.00',
+          metadata: {
+            source: 'RECURRING_PAYROLL_ITEM',
+            recurringItemKind: 'ALLOWANCE',
+            pagIbigFundSalaryTreatment: 'INCLUDE',
+          },
+        }),
+      ),
+    ).toEqual({
+      treatment: 'INCLUDE',
+      reason: null,
+    });
+  });
+
+  it('honors EXCLUDE for a recurring allowance', () => {
+    expect(
+      resolvePagIbigFundSalaryComponentTreatment(
+        lineItem({
+          code: 'TRANSPORT_ALLOWANCE',
+          amount: '800.00',
+          metadata: {
+            source: 'RECURRING_PAYROLL_ITEM',
+            recurringItemKind: 'ALLOWANCE',
+            pagIbigFundSalaryTreatment: 'EXCLUDE',
+          },
+        }),
+      ),
+    ).toEqual({
+      treatment: 'EXCLUDE',
+      reason: null,
+    });
+  });
+
+  it('blocks a legacy recurring earning with no classification', () => {
+    expect(
+      resolvePagIbigFundSalaryComponentTreatment(
+        lineItem({
+          code: 'LEGACY_ALLOWANCE',
+          metadata: {
+            source: 'RECURRING_PAYROLL_ITEM',
+            recurringItemKind: 'ALLOWANCE',
+            pagIbigFundSalaryTreatment: null,
+          },
+        }),
+      ),
+    ).toEqual({
+      treatment: 'UNRESOLVED',
+      reason:
+        'Pag-IBIG Fund Salary treatment is unresolved for recurring earning LEGACY_ALLOWANCE.',
+    });
+  });
+
+  it('honors structured earning-adjustment classification', () => {
+    expect(
+      resolvePagIbigFundSalaryComponentTreatment(
+        lineItem({
+          category: 'ADJUSTMENT',
+          code: 'BONUS_ADJ',
+          amount: '750.00',
+          metadata: {
+            source: 'PAYROLL_ADJUSTMENT',
+            adjustmentType: 'EARNING',
+            pagIbigFundSalaryTreatment: 'INCLUDE',
+          },
+        }),
+      ),
+    ).toEqual({
+      treatment: 'INCLUDE',
+      reason: null,
+    });
+  });
+
+  it('ignores deduction adjustments', () => {
+    expect(
+      resolvePagIbigFundSalaryComponentTreatment(
+        lineItem({
+          category: 'ADJUSTMENT',
+          code: 'DEDUCTION_ADJ',
+          amount: '500.00',
+          metadata: {
+            source: 'PAYROLL_ADJUSTMENT',
+            adjustmentType: 'DEDUCTION',
+            pagIbigFundSalaryTreatment: null,
+          },
+        }),
+      ),
+    ).toEqual({
+      treatment: 'IGNORE',
+      reason: null,
+    });
+  });
+
+  it('does not guess the treatment of an unknown earning source', () => {
+    expect(
+      resolvePagIbigFundSalaryComponentTreatment(
+        lineItem({
+          code: 'FUTURE_EARNING',
+          metadata: {
+            source: 'FUTURE_SOURCE',
+          },
+        }),
+      ),
+    ).toEqual({
+      treatment: 'UNRESOLVED',
+      reason:
+        'Pag-IBIG Fund Salary treatment is not defined for earning FUTURE_EARNING from source FUTURE_SOURCE.',
+    });
+  });
+
+  it('sums only Pag-IBIG-included earnings', () => {
+    expect(
+      resolvePagIbigFundSalaryComponents([
+        lineItem({
+          amount: '5000.00',
+        }),
+        lineItem({
+          code: 'ALLOWANCE_INCLUDED',
+          amount: '1200.00',
+          metadata: {
+            source: 'RECURRING_PAYROLL_ITEM',
+            recurringItemKind: 'ALLOWANCE',
+            pagIbigFundSalaryTreatment: 'INCLUDE',
+          },
+        }),
+        lineItem({
+          code: 'ALLOWANCE_EXCLUDED',
+          amount: '900.00',
+          metadata: {
+            source: 'RECURRING_PAYROLL_ITEM',
+            recurringItemKind: 'ALLOWANCE',
+            pagIbigFundSalaryTreatment: 'EXCLUDE',
+          },
+        }),
+        lineItem({
+          category: 'DEDUCTION',
+          code: 'FIXED_DEDUCTION',
+          amount: '400.00',
+          metadata: {
+            source: 'RECURRING_PAYROLL_ITEM',
+            recurringItemKind: 'FIXED_DEDUCTION',
+            pagIbigFundSalaryTreatment: null,
+          },
+        }),
+      ]),
+    ).toEqual({
+      ready: true,
+      monthlyCompensation: '6200.00',
+      issues: [],
+    });
+  });
+
+  it('returns not ready instead of guessing an unclassified structured earning', () => {
+    expect(
+      resolvePagIbigFundSalaryComponents([
+        lineItem(),
+        lineItem({
+          code: 'LEGACY_ALLOWANCE',
+          amount: '500.00',
+          metadata: {
+            source: 'RECURRING_PAYROLL_ITEM',
+            recurringItemKind: 'ALLOWANCE',
+            pagIbigFundSalaryTreatment: null,
+          },
+        }),
+      ]),
+    ).toEqual({
+      ready: false,
+      monthlyCompensation: null,
+      issues: [
+        'Pag-IBIG Fund Salary treatment is unresolved for recurring earning LEGACY_ALLOWANCE.',
+      ],
+    });
+  });
+
+  it('rejects a negative included earning amount', () => {
+    expect(() =>
+      resolvePagIbigFundSalaryComponents([
+        lineItem({
+          amount: '-1.00',
+        }),
+      ]),
+    ).toThrow(/must not be negative/);
+  });
+});
 
 describe('Philippine statutory basis policy', () => {
   it('blocks SSS when prior remuneration is expected but missing', () => {

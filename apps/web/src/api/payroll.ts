@@ -251,6 +251,78 @@ export interface GeneratedPayrollRunResult {
   clientPayableGross: string | null
 }
 
+
+export type PayrollAdjustmentType =
+  | 'EARNING'
+  | 'DEDUCTION'
+
+export type PayrollStatutoryBasisTreatment =
+  | 'INCLUDE'
+  | 'EXCLUDE'
+
+export interface PayrollAdjustment {
+  id: string
+
+  companyId: string
+  payrollCutoffId: string
+  employeeId: string
+
+  type: PayrollAdjustmentType
+
+  code: string
+  description: string
+
+  amount: string
+
+  reason: string
+
+  taxable: boolean | null
+
+  pagIbigFundSalaryTreatment:
+    | PayrollStatutoryBasisTreatment
+    | null
+
+  createdByUserId: string
+  createdAt: string
+}
+
+export interface CreatePayrollAdjustmentInput {
+  type: PayrollAdjustmentType
+
+  code: string
+  description: string
+
+  amount: number
+
+  reason: string
+
+  taxable?: boolean
+
+  pagIbigFundSalaryTreatment?:
+    PayrollStatutoryBasisTreatment
+}
+
+export interface UpdatePayrollAdjustmentInput {
+  type?: PayrollAdjustmentType
+
+  code?: string
+  description?: string
+
+  amount?: number
+
+  reason?: string
+
+  taxable?: boolean
+
+  pagIbigFundSalaryTreatment?:
+    PayrollStatutoryBasisTreatment
+}
+
+export interface DeletedPayrollAdjustmentResult {
+  id: string
+  deleted: true
+}
+
 function toPayrollRunQueryString(
   query: ListPayrollRunsQuery,
 ): string {
@@ -397,6 +469,85 @@ export function regeneratePayroll(
     accessToken,
     {
       method: 'POST',
+    },
+  )
+}
+
+
+export function listPayrollAdjustments(
+  accessToken: string,
+  companyId: string,
+  payrollCutoffId: string,
+  employeeId?: string,
+): Promise<PayrollAdjustment[]> {
+  const params =
+    new URLSearchParams()
+
+  if (employeeId) {
+    params.set(
+      'employeeId',
+      employeeId,
+    )
+  }
+
+  const query =
+    params.toString()
+
+  return apiRequest<PayrollAdjustment[]>(
+    `/payroll/companies/${companyId}/cutoffs/${payrollCutoffId}/adjustments${
+      query ? `?${query}` : ''
+    }`,
+    accessToken,
+  )
+}
+
+export function createPayrollAdjustment(
+  accessToken: string,
+  companyId: string,
+  payrollCutoffId: string,
+  employeeId: string,
+  input: CreatePayrollAdjustmentInput,
+): Promise<PayrollAdjustment> {
+  return apiRequest<PayrollAdjustment>(
+    `/payroll/companies/${companyId}/cutoffs/${payrollCutoffId}/employees/${employeeId}/adjustments`,
+    accessToken,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
+}
+
+export function updatePayrollAdjustment(
+  accessToken: string,
+  companyId: string,
+  payrollCutoffId: string,
+  employeeId: string,
+  adjustmentId: string,
+  input: UpdatePayrollAdjustmentInput,
+): Promise<PayrollAdjustment> {
+  return apiRequest<PayrollAdjustment>(
+    `/payroll/companies/${companyId}/cutoffs/${payrollCutoffId}/employees/${employeeId}/adjustments/${adjustmentId}`,
+    accessToken,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    },
+  )
+}
+
+export function deletePayrollAdjustment(
+  accessToken: string,
+  companyId: string,
+  payrollCutoffId: string,
+  employeeId: string,
+  adjustmentId: string,
+): Promise<DeletedPayrollAdjustmentResult> {
+  return apiRequest<DeletedPayrollAdjustmentResult>(
+    `/payroll/companies/${companyId}/cutoffs/${payrollCutoffId}/employees/${employeeId}/adjustments/${adjustmentId}`,
+    accessToken,
+    {
+      method: 'DELETE',
     },
   )
 }

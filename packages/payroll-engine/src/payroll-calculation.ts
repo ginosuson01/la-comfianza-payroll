@@ -28,6 +28,10 @@ export type PayrollEngineRecurringItemKind =
   | 'ALLOWANCE'
   | 'FIXED_DEDUCTION';
 
+export type PayrollEngineStatutoryBasisTreatment =
+  | 'INCLUDE'
+  | 'EXCLUDE';
+
 export type PayrollEngineLineCategory =
   | 'EARNING'
   | 'DEDUCTION'
@@ -45,6 +49,8 @@ export interface PayrollEngineRecurringItemInput {
   amount: string;
 
   taxable: boolean;
+
+  pagIbigFundSalaryTreatment?: PayrollEngineStatutoryBasisTreatment | null;
 }
 
 export interface PayrollEngineAdjustmentInput {
@@ -56,6 +62,8 @@ export interface PayrollEngineAdjustmentInput {
   amount: string;
 
   taxable: boolean | null;
+
+  pagIbigFundSalaryTreatment?: PayrollEngineStatutoryBasisTreatment | null;
 
   reason: string;
 }

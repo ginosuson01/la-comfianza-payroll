@@ -84,6 +84,12 @@ type ReadyPayrollCutoffCalculationPreflight =
     totals: NonNullable<PayrollCutoffCalculationPreflight['totals']>;
   };
 
+interface LockedPayrollCutoffState {
+  id: string;
+
+  status: PayrollCutoffStatus;
+}
+
 interface PersistedPayrollRun {
   id: string;
 
@@ -120,6 +126,29 @@ export class PayrollGenerationService {
     const lockedAt = new Date();
 
     return this.prisma.$transaction(async (transaction) => {
+      await this.lockCutoffForGeneration(
+        transaction,
+        input.companyId,
+        input.payrollCutoffId,
+        PayrollCutoffStatus.OPEN,
+      );
+
+      /*
+       * Recalculate while the cutoff row lock is held.
+       *
+       * Payroll adjustments use the same cutoff row lock before
+       * mutation, so no adjustment can commit between this
+       * authoritative preflight and the cutoff LOCKED transition.
+       */
+      const lockedPreflight =
+        await this.cutoffCalculation.calculateCutoffPreflight(
+          input.companyId,
+          input.payrollCutoffId,
+          input.treatmentOptionsByEmployeeId ?? {},
+        );
+
+      this.assertPreflightReady(lockedPreflight);
+
       /*
        * Step 20.5 initial generation accepts only a cutoff
        * that has never entered payroll history.
@@ -169,7 +198,7 @@ export class PayrollGenerationService {
 
       const payrollRun = await this.persistPayrollRun(
         transaction,
-        preflight,
+        lockedPreflight,
         input.actorUserId,
         1,
       );
@@ -187,28 +216,28 @@ export class PayrollGenerationService {
 
         entityId: payrollRun.id,
 
-        reference: `${preflight.cutoff.startDate} to ${preflight.cutoff.endDate}`,
+        reference: `${lockedPreflight.cutoff.startDate} to ${lockedPreflight.cutoff.endDate}`,
 
         details:
           `Generated and locked payroll run version 1 for cutoff ` +
-          `${preflight.cutoff.startDate} to ${preflight.cutoff.endDate}.`,
+          `${lockedPreflight.cutoff.startDate} to ${lockedPreflight.cutoff.endDate}.`,
 
         metadata: {
           payrollCutoffId: input.payrollCutoffId,
 
           version: 1,
 
-          employeeCount: preflight.employees.length,
+          employeeCount: lockedPreflight.employees.length,
 
-          totalGross: preflight.totals.totalGross,
+          totalGross: lockedPreflight.totals.totalGross,
 
-          totalNet: preflight.totals.totalNetBeforeStatusTreatment,
+          totalNet: lockedPreflight.totals.totalNetBeforeStatusTreatment,
 
-          cashPayoutTotal: preflight.totals.cashPayoutTotal,
+          cashPayoutTotal: lockedPreflight.totals.cashPayoutTotal,
 
-          atmPayoutTotal: preflight.totals.atmPayoutTotal,
+          atmPayoutTotal: lockedPreflight.totals.atmPayoutTotal,
 
-          activeHoldTotal: preflight.totals.heldAmountTotal,
+          activeHoldTotal: lockedPreflight.totals.heldAmountTotal,
 
           clientPayableGrossResolved: false,
 
@@ -218,7 +247,7 @@ export class PayrollGenerationService {
         },
       });
 
-      return this.buildGeneratedResult(payrollRun, preflight);
+      return this.buildGeneratedResult(payrollRun, lockedPreflight);
     });
   }
 
@@ -249,6 +278,35 @@ export class PayrollGenerationService {
     const lockedAt = new Date();
 
     return this.prisma.$transaction(async (transaction) => {
+      await this.lockCutoffForGeneration(
+        transaction,
+        input.companyId,
+        input.payrollCutoffId,
+        PayrollCutoffStatus.REOPENED,
+      );
+
+      /*
+       * Recalculate while the REOPENED cutoff row lock is held.
+       *
+       * This guarantees that any payroll adjustment committed
+       * before this lock is included, while later adjustment
+       * mutations must wait and will see LOCKED after commit.
+       */
+      const lockedPreflight =
+        await this.cutoffCalculation.calculateCutoffPreflight(
+          input.companyId,
+          input.payrollCutoffId,
+          input.treatmentOptionsByEmployeeId ?? {},
+        );
+
+      this.assertPreflightReady(lockedPreflight);
+
+      if (lockedPreflight.cutoff.status !== PayrollCutoffStatus.REOPENED) {
+        throw new ConflictException(
+          'Payroll cutoff must remain REOPENED during payroll regeneration.',
+        );
+      }
+
       /*
        * The run that was current before reopening must have
        * been moved by Step 20.6A to
@@ -339,7 +397,7 @@ export class PayrollGenerationService {
        */
       const payrollRun = await this.persistPayrollRun(
         transaction,
-        preflight,
+        lockedPreflight,
         input.actorUserId,
         nextVersion,
       );
@@ -357,11 +415,11 @@ export class PayrollGenerationService {
 
         entityId: payrollRun.id,
 
-        reference: `${preflight.cutoff.startDate} to ${preflight.cutoff.endDate}`,
+        reference: `${lockedPreflight.cutoff.startDate} to ${lockedPreflight.cutoff.endDate}`,
 
         details:
           `Regenerated payroll run version ${nextVersion} for cutoff ` +
-          `${preflight.cutoff.startDate} to ${preflight.cutoff.endDate}. ` +
+          `${lockedPreflight.cutoff.startDate} to ${lockedPreflight.cutoff.endDate}. ` +
           `Payroll run version ${previousRun.version} was superseded.`,
 
         metadata: {
@@ -379,17 +437,17 @@ export class PayrollGenerationService {
 
           newRunStatus: PayrollRunStatus.CURRENT_LOCKED,
 
-          employeeCount: preflight.employees.length,
+          employeeCount: lockedPreflight.employees.length,
 
-          totalGross: preflight.totals.totalGross,
+          totalGross: lockedPreflight.totals.totalGross,
 
-          totalNet: preflight.totals.totalNetBeforeStatusTreatment,
+          totalNet: lockedPreflight.totals.totalNetBeforeStatusTreatment,
 
-          cashPayoutTotal: preflight.totals.cashPayoutTotal,
+          cashPayoutTotal: lockedPreflight.totals.cashPayoutTotal,
 
-          atmPayoutTotal: preflight.totals.atmPayoutTotal,
+          atmPayoutTotal: lockedPreflight.totals.atmPayoutTotal,
 
-          activeHoldTotal: preflight.totals.heldAmountTotal,
+          activeHoldTotal: lockedPreflight.totals.heldAmountTotal,
 
           clientPayableGrossResolved: false,
 
@@ -399,7 +457,7 @@ export class PayrollGenerationService {
         },
       });
 
-      return this.buildGeneratedResult(payrollRun, preflight);
+      return this.buildGeneratedResult(payrollRun, lockedPreflight);
     });
   }
 
@@ -426,8 +484,7 @@ export class PayrollGenerationService {
         configSnapshot:
           preflight.configSnapshot as unknown as Prisma.InputJsonValue,
 
-        companySnapshot:
-          preflight.company as unknown as Prisma.InputJsonValue,
+        companySnapshot: preflight.company as unknown as Prisma.InputJsonValue,
 
         totalGross: preflight.totals.totalGross,
 
@@ -675,6 +732,31 @@ export class PayrollGenerationService {
 
       clientPayableGross: null,
     };
+  }
+
+  private async lockCutoffForGeneration(
+    transaction: Prisma.TransactionClient,
+    companyId: string,
+    payrollCutoffId: string,
+    expectedStatus: PayrollCutoffStatus,
+  ): Promise<void> {
+    const rows = await transaction.$queryRaw<LockedPayrollCutoffState[]>`
+      SELECT
+        "id",
+        "status"
+      FROM "payroll_cutoffs"
+      WHERE "id" = CAST(${payrollCutoffId} AS uuid)
+        AND "companyId" = CAST(${companyId} AS uuid)
+      FOR UPDATE
+    `;
+
+    const cutoff = rows[0];
+
+    if (!cutoff || cutoff.status !== expectedStatus) {
+      throw new ConflictException(
+        `Payroll cutoff is no longer ${expectedStatus}.`,
+      );
+    }
   }
 
   private assertPreflightReady(

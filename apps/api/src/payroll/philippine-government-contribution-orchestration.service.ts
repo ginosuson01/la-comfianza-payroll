@@ -22,7 +22,10 @@ import {
 
 import { buildPhilippineGovernmentContributionResolutions } from './philippine-government-contribution-policy';
 
-import { resolveSssMonthlyCompensationCompleteness } from './philippine-statutory-basis-policy';
+import {
+  resolvePagIbigFundSalaryComponents,
+  resolveSssMonthlyCompensationCompleteness,
+} from './philippine-statutory-basis-policy';
 
 export type PhilippineContributionOrchestrationIssueCode =
   | 'CORE_PAYROLL_INCOMPLETE'
@@ -130,6 +133,10 @@ export class PhilippineGovernmentContributionOrchestrationService {
       };
     }
 
+    const currentPagIbig = resolvePagIbigFundSalaryComponents(
+      corePayroll.lineItems,
+    );
+
     const statutoryMonth = await this.monthlyBasis.resolve({
       companyId: assembly.companyId,
 
@@ -143,6 +150,14 @@ export class PhilippineGovernmentContributionOrchestrationService {
         basicPay: corePayroll.basicPay,
 
         grossPay: corePayroll.grossPay,
+
+        ...(currentPagIbig.ready && currentPagIbig.monthlyCompensation !== null
+          ? {
+              pagIbigMonthlyCompensation: currentPagIbig.monthlyCompensation,
+            }
+          : {
+              pagIbigIssues: currentPagIbig.issues,
+            }),
       },
 
       ...(opening

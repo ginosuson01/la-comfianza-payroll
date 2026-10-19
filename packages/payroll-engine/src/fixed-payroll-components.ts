@@ -72,6 +72,8 @@ export function calculateFixedPayrollComponents(
         metadata: {
           source: 'RECURRING_PAYROLL_ITEM',
           recurringItemKind: item.kind,
+          pagIbigFundSalaryTreatment:
+            item.pagIbigFundSalaryTreatment ?? null,
         },
       });
 
@@ -98,6 +100,8 @@ export function calculateFixedPayrollComponents(
       metadata: {
         source: 'RECURRING_PAYROLL_ITEM',
         recurringItemKind: item.kind,
+        pagIbigFundSalaryTreatment:
+          item.pagIbigFundSalaryTreatment ?? null,
       },
     });
   }
@@ -129,6 +133,8 @@ export function calculateFixedPayrollComponents(
       metadata: {
         source: 'PAYROLL_ADJUSTMENT',
         adjustmentType: adjustment.type,
+        pagIbigFundSalaryTreatment:
+          adjustment.pagIbigFundSalaryTreatment ?? null,
         reason: adjustment.reason,
       },
     });

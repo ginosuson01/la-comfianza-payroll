@@ -1,0 +1,261 @@
+.payroll-adjustment-panel {
+  margin: 0 20px 18px;
+  border: 1px solid #e4e7ec;
+  border-radius: 12px;
+  background: #f9fafb;
+  padding: 16px;
+}
+
+.payroll-adjustment-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.payroll-adjustment-heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.payroll-adjustment-heading strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.payroll-adjustment-heading span {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.payroll-adjustment-readonly {
+  border-radius: 999px;
+  background: #f2f4f7;
+  padding: 5px 9px;
+  color: #475467 !important;
+  font-size: 11px !important;
+  font-weight: 600;
+}
+
+.payroll-adjustment-employee {
+  display: grid;
+  gap: 6px;
+}
+
+.payroll-adjustment-employee > span,
+.payroll-adjustment-form-grid label > span {
+  color: #344054;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.payroll-adjustment-employee select,
+.payroll-adjustment-form-grid input,
+.payroll-adjustment-form-grid select,
+.payroll-adjustment-form-grid textarea {
+  width: 100%;
+}
+
+.payroll-adjustment-employee-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.payroll-adjustment-employee-summary strong {
+  color: #172033;
+  font-size: 12px;
+}
+
+.payroll-adjustment-employee-summary span {
+  color: #667085;
+  font-size: 11px;
+}
+
+.payroll-adjustment-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.payroll-adjustment-empty {
+  border: 1px dashed #d0d5dd;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+  color: #667085;
+  font-size: 12px;
+  text-align: center;
+}
+
+.payroll-adjustment-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 12px 14px;
+}
+
+.payroll-adjustment-row-main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.payroll-adjustment-row-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.payroll-adjustment-row-title strong {
+  color: #172033;
+  font-size: 13px;
+}
+
+.payroll-adjustment-row-main > span {
+  color: #475467;
+  font-size: 12px;
+}
+
+.payroll-adjustment-row-main small {
+  color: #667085;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.payroll-adjustment-type {
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.payroll-adjustment-type-earning {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.payroll-adjustment-type-deduction {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.payroll-adjustment-row-side {
+  flex: none;
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.payroll-adjustment-row-side > strong {
+  color: #172033;
+  font-size: 13px;
+}
+
+.payroll-adjustment-row-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.payroll-adjustment-row-actions button {
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+.payroll-adjustment-form {
+  margin-top: 16px;
+  border-top: 1px solid #eaecf0;
+  padding-top: 16px;
+}
+
+.payroll-adjustment-form-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.payroll-adjustment-form-heading strong {
+  color: #172033;
+  font-size: 13px;
+}
+
+.payroll-adjustment-form-heading button {
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+.payroll-adjustment-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.payroll-adjustment-form-grid label {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.payroll-adjustment-description-field,
+.payroll-adjustment-reason-field {
+  grid-column: 1 / -1;
+}
+
+.payroll-adjustment-form-grid textarea {
+  resize: vertical;
+}
+
+.payroll-adjustment-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.payroll-adjustment-feedback {
+  margin-top: 14px;
+}
+
+@media (max-width: 760px) {
+  .payroll-adjustment-heading,
+  .payroll-adjustment-row,
+  .payroll-adjustment-employee-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .payroll-adjustment-row-side {
+    justify-items: stretch;
+  }
+
+  .payroll-adjustment-row-actions {
+    flex-wrap: wrap;
+  }
+
+  .payroll-adjustment-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .payroll-adjustment-description-field,
+  .payroll-adjustment-reason-field {
+    grid-column: auto;
+  }
+
+  .payroll-adjustment-form-actions button {
+    width: 100%;
+  }
+}

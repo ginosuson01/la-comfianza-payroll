@@ -11,7 +11,10 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { RecurringPayrollItemKind } from '@payroll/database';
+import {
+  PayrollStatutoryBasisTreatment,
+  RecurringPayrollItemKind,
+} from '@payroll/database';
 
 function trimRequiredString({ value }: { value: unknown }): unknown {
   return typeof value === 'string' ? value.trim() : value;
@@ -52,6 +55,10 @@ export class CreateRecurringPayrollItemDto {
   @IsOptional()
   @IsBoolean()
   taxable?: boolean;
+
+  @IsOptional()
+  @IsEnum(PayrollStatutoryBasisTreatment)
+  pagIbigFundSalaryTreatment?: PayrollStatutoryBasisTreatment;
 
   @IsDateString()
   effectiveFrom!: string;

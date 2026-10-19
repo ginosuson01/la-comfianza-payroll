@@ -4,6 +4,7 @@ import {
   EmployeePayrollStatus,
   PayBasis,
   PayrollAdjustmentType,
+  PayrollStatutoryBasisTreatment,
   PayoutMethod,
   RecurringPayrollItemKind,
 } from '@payroll/database';
@@ -168,6 +169,8 @@ function createFixture() {
           amount: decimal('500.00'),
 
           taxable: false,
+
+          pagIbigFundSalaryTreatment: PayrollStatutoryBasisTreatment.INCLUDE,
         },
       ]),
     },
@@ -184,6 +187,8 @@ function createFixture() {
           amount: decimal('100.00'),
 
           taxable: true,
+
+          pagIbigFundSalaryTreatment: PayrollStatutoryBasisTreatment.EXCLUDE,
 
           reason: 'Test adjustment',
         },
@@ -338,6 +343,8 @@ describe('PayrollInputService', () => {
             amount: '500.00',
 
             taxable: false,
+
+            pagIbigFundSalaryTreatment: 'INCLUDE',
           },
         ],
 
@@ -350,6 +357,8 @@ describe('PayrollInputService', () => {
             type: 'EARNING',
 
             amount: '100.00',
+
+            pagIbigFundSalaryTreatment: 'EXCLUDE',
 
             reason: 'Test adjustment',
           },

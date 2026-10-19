@@ -299,6 +299,9 @@ test('creates payroll line items for recurring items and adjustments', () => {
 
             taxable:
               true,
+
+            pagIbigFundSalaryTreatment:
+              'INCLUDE',
           },
 
           {
@@ -333,6 +336,9 @@ test('creates payroll line items for recurring items and adjustments', () => {
 
             taxable:
               true,
+
+            pagIbigFundSalaryTreatment:
+              'EXCLUDE',
 
             reason:
               'Manual correction',
@@ -372,6 +378,9 @@ test('creates payroll line items for recurring items and adjustments', () => {
 
         recurringItemKind:
           'ALLOWANCE',
+
+        pagIbigFundSalaryTreatment:
+          'INCLUDE',
       },
     },
   );
@@ -406,6 +415,9 @@ test('creates payroll line items for recurring items and adjustments', () => {
 
         adjustmentType:
           'EARNING',
+
+        pagIbigFundSalaryTreatment:
+          'EXCLUDE',
 
         reason:
           'Manual correction',

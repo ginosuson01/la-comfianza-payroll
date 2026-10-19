@@ -303,6 +303,14 @@ function createFixture(
   > = jest.fn();
 
   const transaction = {
+    $queryRaw: jest.fn().mockResolvedValue([
+      {
+        id: preflight.payrollCutoffId,
+
+        status: preflight.cutoff.status,
+      },
+    ]),
+
     payrollRun: {
       findFirst: findFirstPayrollRunMock,
 
@@ -448,6 +456,10 @@ describe('PayrollGenerationService regeneration', () => {
       'cutoff-1',
       {},
     );
+
+    expect(fixture.calculateCutoffPreflightMock).toHaveBeenCalledTimes(2);
+
+    expect(fixture.transaction.$queryRaw).toHaveBeenCalledTimes(1);
 
     expect(fixture.findFirstPayrollRunMock).toHaveBeenCalledWith({
       where: {

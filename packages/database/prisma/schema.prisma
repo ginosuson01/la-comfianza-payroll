@@ -132,6 +132,11 @@ enum PayrollAdjustmentType {
   DEDUCTION
 }
 
+enum PayrollStatutoryBasisTreatment {
+  INCLUDE
+  EXCLUDE
+}
+
 enum PayrollRunStatus {
   CURRENT_LOCKED
   REOPENED_PENDING_REGENERATION
@@ -680,6 +685,9 @@ model RecurringPayrollItem {
   amount Decimal @db.Decimal(18, 2)
 
   taxable Boolean @default(false)
+
+  pagIbigFundSalaryTreatment PayrollStatutoryBasisTreatment?
+
   active  Boolean @default(true)
 
   effectiveFrom DateTime  @db.Date
@@ -996,6 +1004,8 @@ model PayrollAdjustment {
   reason String
 
   taxable Boolean?
+
+  pagIbigFundSalaryTreatment PayrollStatutoryBasisTreatment?
 
   createdByUserId String   @db.Uuid
   createdAt       DateTime @default(now()) @db.Timestamptz(3)

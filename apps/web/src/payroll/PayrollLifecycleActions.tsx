@@ -13,6 +13,8 @@ import {
 import { reopenPayrollCutoff } from '../api/payroll-cutoffs'
 import type { PayrollCutoffSummary } from '../api/types'
 
+import { PayrollAdjustmentPanel } from './PayrollAdjustmentPanel'
+
 import './PayrollLifecycleActions.css'
 
 interface PayrollLifecycleActionsProps {
@@ -90,6 +92,11 @@ export function PayrollLifecycleActions({
     setReadinessError,
   ] = useState<string | null>(null)
 
+  const [
+    readinessRefreshKey,
+    setReadinessRefreshKey,
+  ] = useState(0)
+
   useEffect(() => {
     let cancelled = false
 
@@ -151,7 +158,16 @@ export function PayrollLifecycleActions({
     companyId,
     cutoff.id,
     cutoff.status,
+    readinessRefreshKey,
   ])
+
+  function handleAdjustmentChanged() {
+    setReadinessRefreshKey(
+      (current) => current + 1,
+    )
+
+    onChanged()
+  }
 
   async function handleGenerate() {
     if (
@@ -328,6 +344,14 @@ export function PayrollLifecycleActions({
           )}
         </span>
       </div>
+
+      <PayrollAdjustmentPanel
+        accessToken={accessToken}
+        companyId={companyId}
+        payrollCutoffId={cutoff.id}
+        cutoffStatus={cutoff.status}
+        onChanged={handleAdjustmentChanged}
+      />
 
       {cutoff.status === 'OPEN' && (
         <div className="payroll-lifecycle-body">

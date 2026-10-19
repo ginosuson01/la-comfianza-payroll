@@ -1,12 +1,28 @@
-import { Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { RoleCode } from '@payroll/database';
 
 import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import type { ResolvedAuthenticatedIdentity } from '../auth/interfaces/resolved-authenticated-identity.interface';
 
+import { CreatePayrollAdjustmentDto } from './dto/create-payroll-adjustment.dto';
 import { ListEmployeePayrollHistoryQueryDto } from './dto/list-employee-payroll-history-query.dto';
 import { ListPayrollRunsQueryDto } from './dto/list-payroll-runs-query.dto';
+import { UpdatePayrollAdjustmentDto } from './dto/update-payroll-adjustment.dto';
+import {
+  PayrollAdjustmentService,
+  type DeletedPayrollAdjustmentResult,
+  type PayrollAdjustmentView,
+} from './payroll-adjustment.service';
 import {
   PayrollEmployeeHistoryService,
   type EmployeePayrollHistoryResponse,
@@ -56,6 +72,8 @@ export class PayrollController {
     private readonly payrollHistoryService: PayrollHistoryService,
 
     private readonly payrollEmployeeHistoryService: PayrollEmployeeHistoryService,
+
+    private readonly payrollAdjustmentService: PayrollAdjustmentService,
   ) {}
 
   @Get('companies/:companyId/runs')
@@ -98,6 +116,112 @@ export class PayrollController {
       companyId,
       employeeId,
       query,
+    );
+  }
+
+  @Get('companies/:companyId/cutoffs/:payrollCutoffId/adjustments')
+  listPayrollAdjustments(
+    @Param('companyId')
+    companyId: string,
+
+    @Param('payrollCutoffId')
+    payrollCutoffId: string,
+
+    @Query('employeeId')
+    employeeId?: string,
+  ): Promise<PayrollAdjustmentView[]> {
+    return this.payrollAdjustmentService.listAdjustments(
+      companyId,
+      payrollCutoffId,
+      employeeId,
+    );
+  }
+
+  @Post(
+    'companies/:companyId/cutoffs/:payrollCutoffId/employees/:employeeId/adjustments',
+  )
+  createPayrollAdjustment(
+    @Param('companyId')
+    companyId: string,
+
+    @Param('payrollCutoffId')
+    payrollCutoffId: string,
+
+    @Param('employeeId')
+    employeeId: string,
+
+    @Body()
+    input: CreatePayrollAdjustmentDto,
+
+    @CurrentAuth()
+    identity: ResolvedAuthenticatedIdentity,
+  ): Promise<PayrollAdjustmentView> {
+    return this.payrollAdjustmentService.createAdjustment(
+      companyId,
+      payrollCutoffId,
+      employeeId,
+      input,
+      identity.user.id,
+    );
+  }
+
+  @Patch(
+    'companies/:companyId/cutoffs/:payrollCutoffId/employees/:employeeId/adjustments/:adjustmentId',
+  )
+  updatePayrollAdjustment(
+    @Param('companyId')
+    companyId: string,
+
+    @Param('payrollCutoffId')
+    payrollCutoffId: string,
+
+    @Param('employeeId')
+    employeeId: string,
+
+    @Param('adjustmentId')
+    adjustmentId: string,
+
+    @Body()
+    input: UpdatePayrollAdjustmentDto,
+
+    @CurrentAuth()
+    identity: ResolvedAuthenticatedIdentity,
+  ): Promise<PayrollAdjustmentView> {
+    return this.payrollAdjustmentService.updateAdjustment(
+      companyId,
+      payrollCutoffId,
+      employeeId,
+      adjustmentId,
+      input,
+      identity.user.id,
+    );
+  }
+
+  @Delete(
+    'companies/:companyId/cutoffs/:payrollCutoffId/employees/:employeeId/adjustments/:adjustmentId',
+  )
+  deletePayrollAdjustment(
+    @Param('companyId')
+    companyId: string,
+
+    @Param('payrollCutoffId')
+    payrollCutoffId: string,
+
+    @Param('employeeId')
+    employeeId: string,
+
+    @Param('adjustmentId')
+    adjustmentId: string,
+
+    @CurrentAuth()
+    identity: ResolvedAuthenticatedIdentity,
+  ): Promise<DeletedPayrollAdjustmentResult> {
+    return this.payrollAdjustmentService.deleteAdjustment(
+      companyId,
+      payrollCutoffId,
+      employeeId,
+      adjustmentId,
+      identity.user.id,
     );
   }
 

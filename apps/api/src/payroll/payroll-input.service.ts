@@ -359,6 +359,8 @@ export class PayrollInputService {
 
         taxable: true,
 
+        pagIbigFundSalaryTreatment: true,
+
         effectiveFrom: true,
       },
     });
@@ -396,6 +398,8 @@ export class PayrollInputService {
         amount: true,
 
         taxable: true,
+
+        pagIbigFundSalaryTreatment: true,
 
         reason: true,
       },
@@ -518,6 +522,8 @@ export class PayrollInputService {
         amount: item.amount.toFixed(2),
 
         taxable: item.taxable,
+
+        pagIbigFundSalaryTreatment: item.pagIbigFundSalaryTreatment,
       })),
 
       adjustments: adjustments.map((adjustment) => ({
@@ -530,6 +536,8 @@ export class PayrollInputService {
         amount: adjustment.amount.toFixed(2),
 
         taxable: adjustment.taxable,
+
+        pagIbigFundSalaryTreatment: adjustment.pagIbigFundSalaryTreatment,
 
         reason: adjustment.reason,
       })),

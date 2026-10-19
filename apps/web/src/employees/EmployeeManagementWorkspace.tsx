@@ -21,6 +21,7 @@ import { EmployeeCompensationPanel } from './EmployeeCompensationPanel'
 import { EmployeeEmploymentPanel } from './EmployeeEmploymentPanel'
 import { EmployeeFormPanel } from './EmployeeFormPanel'
 import { EmployeePayrollProfilePanel } from './EmployeePayrollProfilePanel'
+import { EmployeeRecurringPayrollPanel } from './EmployeeRecurringPayrollPanel'
 import { EmployeeStartDateCorrectionPanel } from './EmployeeStartDateCorrectionPanel'
 import { EmployeeStatusPanel } from './EmployeeStatusPanel'
 
@@ -233,6 +234,11 @@ export function EmployeeManagementWorkspace({
   const [
     payrollProfileMode,
     setPayrollProfileMode,
+  ] = useState(false)
+
+  const [
+    recurringPayrollMode,
+    setRecurringPayrollMode,
   ] = useState(false)
 
   const [
@@ -492,6 +498,7 @@ export function EmployeeManagementWorkspace({
               setCorrectionMode(false)
               setCompensationMode(false)
               setPayrollProfileMode(false)
+              setRecurringPayrollMode(false)
               setFormMode('CREATE')
             }}
           >
@@ -815,20 +822,29 @@ export function EmployeeManagementWorkspace({
         </section>
 
         <section className="attendance-card employee-profile-card">
-          {payrollProfileMode && selectedEmployee ? (
-            <EmployeePayrollProfilePanel
+          {recurringPayrollMode && selectedEmployee ? (
+            <EmployeeRecurringPayrollPanel
               accessToken={accessToken}
               employee={selectedEmployee}
               onCancel={() =>
-                setPayrollProfileMode(false)
+                setRecurringPayrollMode(false)
               }
+            />
+          ) : payrollProfileMode && selectedEmployee ? (
+            <EmployeePayrollProfilePanel
+              accessToken={accessToken}
+              employee={selectedEmployee}
+              onCancel={() => {
+                setPayrollProfileMode(false)
+                setRecurringPayrollMode(false)
+              }}
               onSaved={(savedProfile) => {
                 setPayrollProfileMode(false)
+                setRecurringPayrollMode(false)
                 setCompensationMode(false)
                 setCorrectionMode(false)
                 setEmploymentMode(false)
                 setStatusMode(false)
-                setPayrollProfileMode(false)
                 setFormMode(null)
 
                 setActionMessage(
@@ -855,6 +871,7 @@ export function EmployeeManagementWorkspace({
                 setStatusMode(false)
                 setCompensationMode(false)
                 setPayrollProfileMode(false)
+                setRecurringPayrollMode(false)
                 setFormMode(null)
 
                 setActionMessage(
@@ -903,6 +920,7 @@ export function EmployeeManagementWorkspace({
                 setCorrectionMode(false)
                 setCompensationMode(false)
                 setPayrollProfileMode(false)
+                setRecurringPayrollMode(false)
                 setFormMode(null)
 
                 setSelectedEmployeeId(
@@ -936,6 +954,7 @@ export function EmployeeManagementWorkspace({
                 setCorrectionMode(false)
                 setCompensationMode(false)
                 setPayrollProfileMode(false)
+                setRecurringPayrollMode(false)
                 setFormMode(null)
 
                 setActionMessage(
@@ -1005,6 +1024,7 @@ export function EmployeeManagementWorkspace({
                       setCorrectionMode(false)
                       setCompensationMode(false)
                       setPayrollProfileMode(false)
+                      setRecurringPayrollMode(false)
                       setFormMode('EDIT')
                     }}
                   >
@@ -1021,6 +1041,7 @@ export function EmployeeManagementWorkspace({
                       setCorrectionMode(false)
                       setCompensationMode(false)
                       setPayrollProfileMode(false)
+                      setRecurringPayrollMode(false)
                       setStatusMode(true)
                     }}
                   >
@@ -1037,6 +1058,7 @@ export function EmployeeManagementWorkspace({
                       setCorrectionMode(false)
                       setCompensationMode(false)
                       setPayrollProfileMode(false)
+                      setRecurringPayrollMode(false)
                       setEmploymentMode(true)
                     }}
                   >
@@ -1053,6 +1075,7 @@ export function EmployeeManagementWorkspace({
                       setEmploymentMode(false)
                       setCompensationMode(false)
                       setPayrollProfileMode(false)
+                      setRecurringPayrollMode(false)
                       setCorrectionMode(true)
                     }}
                   >
@@ -1069,6 +1092,7 @@ export function EmployeeManagementWorkspace({
                       setEmploymentMode(false)
                       setCorrectionMode(false)
                       setPayrollProfileMode(false)
+                      setRecurringPayrollMode(false)
                       setCompensationMode(true)
                     }}
                   >
@@ -1085,10 +1109,28 @@ export function EmployeeManagementWorkspace({
                       setEmploymentMode(false)
                       setCorrectionMode(false)
                       setCompensationMode(false)
+                      setRecurringPayrollMode(false)
                       setPayrollProfileMode(true)
                     }}
                   >
                     Payroll Profile
+                  </button>
+
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      setActionMessage(null)
+                      setFormMode(null)
+                      setStatusMode(false)
+                      setEmploymentMode(false)
+                      setCorrectionMode(false)
+                      setCompensationMode(false)
+                      setPayrollProfileMode(false)
+                      setRecurringPayrollMode(true)
+                    }}
+                  >
+                    Recurring Payroll
                   </button>
                 </div>
               </div>

@@ -165,4 +165,98 @@ describe('EmployeesController', () => {
       actorUserId,
     );
   });
+  it('forwards recurring payroll item listing for the selected employee', async () => {
+    const employeeId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+    const listActiveRecurringPayrollItems = jest.fn().mockResolvedValue([
+      {
+        id: '55555555-5555-4555-8555-555555555555',
+        code: 'RICE',
+      },
+    ]);
+
+    const recurringPayrollService = {
+      listActiveRecurringPayrollItems,
+    } as unknown as EmployeeRecurringPayrollService;
+
+    const controller = new EmployeesController(
+      {} as EmployeesService,
+      {} as EmployeeCompensationService,
+      recurringPayrollService,
+      {} as EmployeeStatusService,
+      {} as EmployeePayrollProfileService,
+      {} as EmployeeLeaveCreditService,
+      {} as EmployeeLeaveEntitlementCycleService,
+      {} as EmployeeLeaveEntitlementService,
+      {} as EmployeeAlphaListService,
+      {} as EmployeeAlphaListCsvService,
+      {} as EmployeeAlphaListPdfService,
+    );
+
+    await controller.listRecurringPayrollItems(employeeId);
+
+    expect(listActiveRecurringPayrollItems).toHaveBeenCalledTimes(1);
+
+    expect(listActiveRecurringPayrollItems).toHaveBeenCalledWith(
+      employeeId,
+    );
+  });
+
+  it('forwards recurring allowance Pag-IBIG treatment correction with the authenticated actor', async () => {
+    const employeeId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const recurringPayrollItemId =
+      '55555555-5555-4555-8555-555555555555';
+    const actorUserId = '99999999-9999-4999-8999-999999999999';
+
+    const updatePagIbigFundSalaryTreatment =
+      jest.fn().mockResolvedValue({
+        id: recurringPayrollItemId,
+        pagIbigFundSalaryTreatment: 'INCLUDE',
+      });
+
+    const recurringPayrollService = {
+      updatePagIbigFundSalaryTreatment,
+    } as unknown as EmployeeRecurringPayrollService;
+
+    const controller = new EmployeesController(
+      {} as EmployeesService,
+      {} as EmployeeCompensationService,
+      recurringPayrollService,
+      {} as EmployeeStatusService,
+      {} as EmployeePayrollProfileService,
+      {} as EmployeeLeaveCreditService,
+      {} as EmployeeLeaveEntitlementCycleService,
+      {} as EmployeeLeaveEntitlementService,
+      {} as EmployeeAlphaListService,
+      {} as EmployeeAlphaListCsvService,
+      {} as EmployeeAlphaListPdfService,
+    );
+
+    const identity = {
+      user: {
+        id: actorUserId,
+      },
+    } as unknown as ResolvedAuthenticatedIdentity;
+
+    const input = {
+      pagIbigFundSalaryTreatment: 'INCLUDE' as const,
+    };
+
+    await controller.updateRecurringPayrollItemPagIbigTreatment(
+      employeeId,
+      recurringPayrollItemId,
+      input,
+      identity,
+    );
+
+    expect(updatePagIbigFundSalaryTreatment).toHaveBeenCalledTimes(1);
+
+    expect(updatePagIbigFundSalaryTreatment).toHaveBeenCalledWith(
+      employeeId,
+      recurringPayrollItemId,
+      input,
+      actorUserId,
+    );
+  });
+
 });

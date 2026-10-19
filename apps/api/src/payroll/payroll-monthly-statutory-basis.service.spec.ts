@@ -41,15 +41,23 @@ describe('PayrollMonthlyStatutoryBasisService', () => {
 
         lineItems: [
           {
+            category: PayrollLineCategory.CONTRIBUTION,
+
             code: 'PHILHEALTH',
 
             amount: decimal('250.00'),
+
+            metadata: null,
           },
 
           {
+            category: PayrollLineCategory.CONTRIBUTION,
+
             code: 'PAGIBIG',
 
             amount: decimal('100.00'),
+
+            metadata: null,
           },
 
           /*
@@ -57,9 +65,13 @@ describe('PayrollMonthlyStatutoryBasisService', () => {
            * allowed to contaminate statutory totals.
            */
           {
+            category: PayrollLineCategory.CONTRIBUTION,
+
             code: 'OTHER',
 
             amount: decimal('999.00'),
+
+            metadata: null,
           },
         ],
 
@@ -193,12 +205,20 @@ describe('PayrollMonthlyStatutoryBasisService', () => {
 
         lineItems: {
           where: {
-            category: PayrollLineCategory.CONTRIBUTION,
+            category: {
+              in: [
+                PayrollLineCategory.CONTRIBUTION,
+                PayrollLineCategory.EARNING,
+                PayrollLineCategory.ADJUSTMENT,
+              ],
+            },
           },
 
           select: {
+            category: true,
             code: true,
             amount: true,
+            metadata: true,
           },
         },
 
@@ -259,6 +279,179 @@ describe('PayrollMonthlyStatutoryBasisService', () => {
 
       PAGIBIG: '0.00',
     });
+  });
+
+  it('accumulates uncapped Pag-IBIG compensation from opening, frozen prior payroll and the current cutoff', async () => {
+    const { prisma, service } = createFixture();
+
+    prisma.payrollRunEmployee.findMany.mockResolvedValueOnce([
+      {
+        basicPay: decimal('5000.00'),
+
+        grossPay: decimal('6500.00'),
+
+        lineItems: [
+          {
+            category: PayrollLineCategory.EARNING,
+            code: 'BASIC_PAY',
+            amount: decimal('5000.00'),
+            metadata: {
+              source: 'ATTENDANCE_REGULAR_MINUTES',
+            },
+          },
+          {
+            category: PayrollLineCategory.EARNING,
+            code: 'MEAL_ALLOWANCE',
+            amount: decimal('1000.00'),
+            metadata: {
+              source: 'RECURRING_PAYROLL_ITEM',
+              recurringItemKind: 'ALLOWANCE',
+              pagIbigFundSalaryTreatment: 'INCLUDE',
+            },
+          },
+          {
+            category: PayrollLineCategory.EARNING,
+            code: 'TRANSPORT_ALLOWANCE',
+            amount: decimal('500.00'),
+            metadata: {
+              source: 'RECURRING_PAYROLL_ITEM',
+              recurringItemKind: 'ALLOWANCE',
+              pagIbigFundSalaryTreatment: 'EXCLUDE',
+            },
+          },
+        ],
+
+        payrollRun: {
+          id: 'run-first',
+          payrollCutoffId: 'cutoff-first',
+          version: 1,
+          payrollCutoff: {
+            startDate: new Date('2026-09-01T00:00:00.000Z'),
+            endDate: new Date('2026-09-15T00:00:00.000Z'),
+            payDate: new Date('2026-09-25T00:00:00.000Z'),
+          },
+        },
+      },
+    ]);
+
+    const result = await service.resolve({
+      companyId: 'company-1',
+      employeeId: 'employee-1',
+      payrollCutoffId: 'cutoff-second',
+      monthReferenceDate: '2026-09-30',
+
+      opening: {
+        pagIbigMonthlyCompensation: '500.00',
+      },
+
+      current: {
+        basicPay: '6000.00',
+        grossPay: '7000.00',
+        pagIbigMonthlyCompensation: '6200.00',
+      },
+    });
+
+    expect(result.priorLockedRuns[0]?.pagIbigMonthlyCompensation).toBe(
+      '6000.00',
+    );
+
+    expect(result.prior.pagIbigMonthlyCompensation).toBe('6000.00');
+
+    expect(result.current.pagIbigMonthlyCompensation).toBe('6200.00');
+
+    expect(result.monthly.pagIbigMonthlyCompensation).toBe('12700.00');
+
+    expect(result.monthly.pagIbigIssues).toEqual([]);
+
+    expect(result.openingPagIbigMonthlyCompensationProvided).toBe(true);
+  });
+
+  it('keeps Pag-IBIG basis unresolved when frozen prior payroll contains an unclassified structured earning', async () => {
+    const { prisma, service } = createFixture();
+
+    prisma.payrollRunEmployee.findMany.mockResolvedValueOnce([
+      {
+        basicPay: decimal('5000.00'),
+
+        grossPay: decimal('5500.00'),
+
+        lineItems: [
+          {
+            category: PayrollLineCategory.EARNING,
+            code: 'LEGACY_ALLOWANCE',
+            amount: decimal('500.00'),
+            metadata: {
+              source: 'RECURRING_PAYROLL_ITEM',
+              recurringItemKind: 'ALLOWANCE',
+              pagIbigFundSalaryTreatment: null,
+            },
+          },
+        ],
+
+        payrollRun: {
+          id: 'run-legacy',
+          payrollCutoffId: 'cutoff-legacy',
+          version: 1,
+          payrollCutoff: {
+            startDate: new Date('2026-09-01T00:00:00.000Z'),
+            endDate: new Date('2026-09-15T00:00:00.000Z'),
+            payDate: new Date('2026-09-25T00:00:00.000Z'),
+          },
+        },
+      },
+    ]);
+
+    const result = await service.resolve({
+      companyId: 'company-1',
+      employeeId: 'employee-1',
+      payrollCutoffId: 'cutoff-current',
+      monthReferenceDate: '2026-09-30',
+
+      current: {
+        basicPay: '6000.00',
+        grossPay: '6000.00',
+        pagIbigMonthlyCompensation: '6000.00',
+      },
+    });
+
+    expect(result.prior.pagIbigMonthlyCompensation).toBeNull();
+
+    expect(result.monthly.pagIbigMonthlyCompensation).toBeNull();
+
+    expect(result.monthly.pagIbigIssues).toEqual([
+      'Prior locked payroll run-legacy: Pag-IBIG Fund Salary treatment is unresolved for recurring earning LEGACY_ALLOWANCE.',
+    ]);
+
+    /*
+     * Existing monthly SSS/gross accumulation remains usable.
+     */
+    expect(result.monthly.grossPay).toBe('11500.00');
+  });
+
+  it('does not invent current Pag-IBIG compensation when it has not yet been supplied by orchestration', async () => {
+    const { prisma, service } = createFixture();
+
+    prisma.payrollRunEmployee.findMany.mockResolvedValueOnce([]);
+
+    const result = await service.resolve({
+      companyId: 'company-1',
+      employeeId: 'employee-1',
+      payrollCutoffId: 'cutoff-current',
+      monthReferenceDate: '2026-09-15',
+
+      current: {
+        basicPay: '4000.00',
+        grossPay: '4500.00',
+      },
+    });
+
+    expect(result.current.pagIbigMonthlyCompensation).toBeNull();
+
+    expect(result.monthly.pagIbigMonthlyCompensation).toBeNull();
+
+    expect(result.monthly.pagIbigIssues).toEqual([
+      'Current cutoff Pag-IBIG monthly compensation has not been resolved.',
+    ]);
   });
 
   it('sorts prior payroll history by cutoff end date', async () => {

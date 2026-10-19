@@ -366,6 +366,60 @@ export interface SetEmployeeCompensationInput {
   effectiveFrom: string
 }
 
+export type EmployeeRecurringPayrollItemKind =
+  | 'ALLOWANCE'
+  | 'FIXED_DEDUCTION'
+
+export type EmployeePayrollStatutoryBasisTreatment =
+  | 'INCLUDE'
+  | 'EXCLUDE'
+
+export interface EmployeeRecurringPayrollItemView {
+  id: string
+  employmentRecordId: string
+
+  kind: EmployeeRecurringPayrollItemKind
+
+  code: string
+  description: string
+
+  amount: string
+
+  taxable: boolean
+
+  pagIbigFundSalaryTreatment:
+    EmployeePayrollStatutoryBasisTreatment | null
+
+  active: boolean
+
+  effectiveFrom: string
+  effectiveTo: string | null
+
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateEmployeeRecurringPayrollItemInput {
+  kind: EmployeeRecurringPayrollItemKind
+
+  code: string
+  description: string
+
+  amount: number
+
+  taxable?: boolean
+
+  pagIbigFundSalaryTreatment?:
+    EmployeePayrollStatutoryBasisTreatment
+
+  effectiveFrom: string
+}
+
+export interface UpdateEmployeeRecurringPayrollItemPagIbigTreatmentInput {
+  pagIbigFundSalaryTreatment:
+    EmployeePayrollStatutoryBasisTreatment
+}
+
 export interface EmployeePayrollProfileView {
   id: string
   employmentRecordId: string
@@ -415,6 +469,47 @@ export function setEmployeeCompensation(
     accessToken,
     {
       method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
+}
+
+export function listEmployeeRecurringPayrollItems(
+  accessToken: string,
+  employeeId: string,
+): Promise<EmployeeRecurringPayrollItemView[]> {
+  return apiRequest<EmployeeRecurringPayrollItemView[]>(
+    `/employees/${employeeId}/recurring-payroll-items`,
+    accessToken,
+  )
+}
+
+export function createEmployeeRecurringPayrollItem(
+  accessToken: string,
+  employeeId: string,
+  input: CreateEmployeeRecurringPayrollItemInput,
+): Promise<EmployeeRecurringPayrollItemView> {
+  return apiRequest<EmployeeRecurringPayrollItemView>(
+    `/employees/${employeeId}/recurring-payroll-items`,
+    accessToken,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
+}
+
+export function updateEmployeeRecurringPayrollItemPagIbigTreatment(
+  accessToken: string,
+  employeeId: string,
+  recurringPayrollItemId: string,
+  input: UpdateEmployeeRecurringPayrollItemPagIbigTreatmentInput,
+): Promise<EmployeeRecurringPayrollItemView> {
+  return apiRequest<EmployeeRecurringPayrollItemView>(
+    `/employees/${employeeId}/recurring-payroll-items/${recurringPayrollItemId}/pagibig-treatment`,
+    accessToken,
+    {
+      method: 'PATCH',
       body: JSON.stringify(input),
     },
   )

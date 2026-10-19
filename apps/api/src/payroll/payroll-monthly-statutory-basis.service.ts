@@ -6,6 +6,8 @@ import { formatMoney, parseMoney } from '@payroll/payroll-engine';
 
 import { PrismaService } from '../database/prisma.service';
 
+import { resolvePagIbigFundSalaryComponents } from './philippine-statutory-basis-policy';
+
 export type PhilippineContributionCode = 'SSS' | 'PHILHEALTH' | 'PAGIBIG';
 
 export interface PayrollMonthlyContributionAmounts {
@@ -24,6 +26,15 @@ export interface PayrollMonthlyStatutoryOpeningValues {
    */
   basicPay?: string;
   grossPay?: string;
+
+  /*
+   * Explicit opening Pag-IBIG eligible monthly compensation.
+   *
+   * Used when an earlier payroll belonging to the statutory
+   * month was processed outside this system. It is never
+   * inferred from gross pay.
+   */
+  pagIbigMonthlyCompensation?: string;
 
   contributionAmounts?: Partial<Record<PhilippineContributionCode, string>>;
 }
@@ -51,6 +62,16 @@ export interface PayrollMonthlyStatutoryBasisInput {
   current: {
     basicPay: string;
     grossPay: string;
+
+    /*
+     * Pag-IBIG eligible compensation already resolved from
+     * this cutoff's computed line items.
+     *
+     * Optional while SECOND-cutoff orchestration is migrated.
+     */
+    pagIbigMonthlyCompensation?: string;
+
+    pagIbigIssues?: readonly string[];
   };
 
   opening?: PayrollMonthlyStatutoryOpeningValues;
@@ -70,6 +91,10 @@ export interface PayrollMonthlyStatutoryPriorRun {
 
   basicPay: string;
   grossPay: string;
+
+  pagIbigMonthlyCompensation: string | null;
+
+  pagIbigIssues: readonly string[];
 
   contributionAmounts: PayrollMonthlyContributionAmounts;
 }
@@ -95,9 +120,13 @@ export interface PayrollMonthlyStatutoryBasis {
    */
   openingGrossPayProvided: boolean;
 
+  openingPagIbigMonthlyCompensationProvided: boolean;
+
   opening: {
     basicPay: string;
     grossPay: string;
+
+    pagIbigMonthlyCompensation: string;
 
     contributionAmounts: PayrollMonthlyContributionAmounts;
   };
@@ -108,12 +137,18 @@ export interface PayrollMonthlyStatutoryBasis {
     basicPay: string;
     grossPay: string;
 
+    pagIbigMonthlyCompensation: string | null;
+
+    pagIbigIssues: readonly string[];
+
     contributionAmounts: PayrollMonthlyContributionAmounts;
   };
 
   current: {
     basicPay: string;
     grossPay: string;
+
+    pagIbigMonthlyCompensation: string | null;
   };
 
   /*
@@ -123,6 +158,16 @@ export interface PayrollMonthlyStatutoryBasis {
   monthly: {
     basicPay: string;
     grossPay: string;
+
+    /*
+     * Uncapped Pag-IBIG eligible monthly compensation.
+     *
+     * The contribution calculator applies the configured
+     * maximum Fund Salary later.
+     */
+    pagIbigMonthlyCompensation: string | null;
+
+    pagIbigIssues: readonly string[];
 
     /*
      * Amounts already collected earlier in this statutory month.
@@ -203,12 +248,20 @@ export class PayrollMonthlyStatutoryBasisService {
 
         lineItems: {
           where: {
-            category: PayrollLineCategory.CONTRIBUTION,
+            category: {
+              in: [
+                PayrollLineCategory.CONTRIBUTION,
+                PayrollLineCategory.EARNING,
+                PayrollLineCategory.ADJUSTMENT,
+              ],
+            },
           },
 
           select: {
+            category: true,
             code: true,
             amount: true,
+            metadata: true,
           },
         },
 
@@ -237,7 +290,10 @@ export class PayrollMonthlyStatutoryBasisService {
         const contributions = this.emptyContributionAccumulator();
 
         for (const lineItem of row.lineItems) {
-          if (!this.isContributionCode(lineItem.code)) {
+          if (
+            lineItem.category !== PayrollLineCategory.CONTRIBUTION ||
+            !this.isContributionCode(lineItem.code)
+          ) {
             continue;
           }
 
@@ -245,6 +301,27 @@ export class PayrollMonthlyStatutoryBasisService {
             lineItem.amount.toFixed(2),
           );
         }
+
+        const pagIbig = resolvePagIbigFundSalaryComponents(
+          row.lineItems
+            .filter(
+              (lineItem) =>
+                lineItem.category === PayrollLineCategory.EARNING ||
+                lineItem.category === PayrollLineCategory.ADJUSTMENT,
+            )
+            .map((lineItem) => ({
+              category:
+                lineItem.category === PayrollLineCategory.EARNING
+                  ? ('EARNING' as const)
+                  : ('ADJUSTMENT' as const),
+
+              code: lineItem.code,
+
+              amount: lineItem.amount.toFixed(2),
+
+              metadata: this.toMetadataRecord(lineItem.metadata),
+            })),
+        );
 
         return {
           payrollRunId: row.payrollRun.id,
@@ -265,6 +342,12 @@ export class PayrollMonthlyStatutoryBasisService {
 
           grossPay: row.grossPay.toFixed(2),
 
+          pagIbigMonthlyCompensation: pagIbig.ready
+            ? pagIbig.monthlyCompensation
+            : null,
+
+          pagIbigIssues: pagIbig.issues,
+
           contributionAmounts: this.formatContributions(contributions),
         };
       })
@@ -276,10 +359,26 @@ export class PayrollMonthlyStatutoryBasisService {
 
     const priorAccumulator = this.emptyAccumulator();
 
+    let priorPagIbigMonthlyCompensation = 0n;
+
+    const priorPagIbigIssues: string[] = [];
+
     for (const prior of priorLockedRuns) {
       priorAccumulator.basicPay += parseMoney(prior.basicPay);
 
       priorAccumulator.grossPay += parseMoney(prior.grossPay);
+
+      if (prior.pagIbigMonthlyCompensation === null) {
+        for (const issue of prior.pagIbigIssues) {
+          priorPagIbigIssues.push(
+            `Prior locked payroll ${prior.payrollRunId}: ${issue}`,
+          );
+        }
+      } else {
+        priorPagIbigMonthlyCompensation += parseMoney(
+          prior.pagIbigMonthlyCompensation,
+        );
+      }
 
       for (const code of CONTRIBUTION_CODES) {
         priorAccumulator.contributions[code] += parseMoney(
@@ -292,6 +391,10 @@ export class PayrollMonthlyStatutoryBasisService {
 
     const openingGrossPay = parseMoney(opening.grossPay);
 
+    const openingPagIbigMonthlyCompensation = parseMoney(
+      opening.pagIbigMonthlyCompensation,
+    );
+
     const currentBasicPay = this.requireNonNegativeMoney(
       input.current.basicPay,
       'Current basic pay',
@@ -301,6 +404,38 @@ export class PayrollMonthlyStatutoryBasisService {
       input.current.grossPay,
       'Current gross pay',
     );
+
+    const currentPagIbigMonthlyCompensation =
+      input.current.pagIbigMonthlyCompensation === undefined
+        ? null
+        : this.requireNonNegativeMoney(
+            input.current.pagIbigMonthlyCompensation,
+            'Current Pag-IBIG monthly compensation',
+          );
+
+    const pagIbigIssues = [...priorPagIbigIssues];
+
+    if (currentPagIbigMonthlyCompensation === null) {
+      if (
+        input.current.pagIbigIssues !== undefined &&
+        input.current.pagIbigIssues.length > 0
+      ) {
+        pagIbigIssues.push(...input.current.pagIbigIssues);
+      } else {
+        pagIbigIssues.push(
+          'Current cutoff Pag-IBIG monthly compensation has not been resolved.',
+        );
+      }
+    }
+
+    const monthlyPagIbigMonthlyCompensation =
+      pagIbigIssues.length === 0 && currentPagIbigMonthlyCompensation !== null
+        ? formatMoney(
+            openingPagIbigMonthlyCompensation +
+              priorPagIbigMonthlyCompensation +
+              currentPagIbigMonthlyCompensation,
+          )
+        : null;
 
     const collectedContributions = this.emptyContributionAccumulator();
 
@@ -321,6 +456,9 @@ export class PayrollMonthlyStatutoryBasisService {
 
       openingGrossPayProvided: input.opening?.grossPay !== undefined,
 
+      openingPagIbigMonthlyCompensationProvided:
+        input.opening?.pagIbigMonthlyCompensation !== undefined,
+
       opening,
 
       priorLockedRuns,
@@ -329,6 +467,13 @@ export class PayrollMonthlyStatutoryBasisService {
         basicPay: formatMoney(priorAccumulator.basicPay),
 
         grossPay: formatMoney(priorAccumulator.grossPay),
+
+        pagIbigMonthlyCompensation:
+          priorPagIbigIssues.length === 0
+            ? formatMoney(priorPagIbigMonthlyCompensation)
+            : null,
+
+        pagIbigIssues: priorPagIbigIssues,
 
         contributionAmounts: this.formatContributions(
           priorAccumulator.contributions,
@@ -339,6 +484,11 @@ export class PayrollMonthlyStatutoryBasisService {
         basicPay: formatMoney(currentBasicPay),
 
         grossPay: formatMoney(currentGrossPay),
+
+        pagIbigMonthlyCompensation:
+          currentPagIbigMonthlyCompensation === null
+            ? null
+            : formatMoney(currentPagIbigMonthlyCompensation),
       },
 
       monthly: {
@@ -349,6 +499,10 @@ export class PayrollMonthlyStatutoryBasisService {
         grossPay: formatMoney(
           openingGrossPay + priorAccumulator.grossPay + currentGrossPay,
         ),
+
+        pagIbigMonthlyCompensation: monthlyPagIbigMonthlyCompensation,
+
+        pagIbigIssues,
 
         contributionAmountsAlreadyCollected: this.formatContributions(
           collectedContributions,
@@ -372,6 +526,12 @@ export class PayrollMonthlyStatutoryBasisService {
       'Opening gross pay',
     );
 
+    const pagIbigMonthlyCompensation = this.requireNonNegativeMoney(
+      opening?.pagIbigMonthlyCompensation ?? '0.00',
+
+      'Opening Pag-IBIG monthly compensation',
+    );
+
     const contributions = this.emptyContributionAccumulator();
 
     for (const code of CONTRIBUTION_CODES) {
@@ -386,6 +546,8 @@ export class PayrollMonthlyStatutoryBasisService {
       basicPay: formatMoney(basicPay),
 
       grossPay: formatMoney(grossPay),
+
+      pagIbigMonthlyCompensation: formatMoney(pagIbigMonthlyCompensation),
 
       contributionAmounts: this.formatContributions(contributions),
     };
@@ -429,6 +591,16 @@ export class PayrollMonthlyStatutoryBasisService {
     value: string,
   ): value is PhilippineContributionCode {
     return value === 'SSS' || value === 'PHILHEALTH' || value === 'PAGIBIG';
+  }
+
+  private toMetadataRecord(
+    value: unknown,
+  ): Readonly<Record<string, unknown>> | null {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+
+    return value as Readonly<Record<string, unknown>>;
   }
 
   private requireNonNegativeMoney(value: string, fieldName: string): bigint {

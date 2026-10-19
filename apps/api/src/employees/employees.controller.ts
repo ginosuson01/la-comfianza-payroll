@@ -57,6 +57,7 @@ import { CorrectEmploymentStartDateDto } from './dto/correct-employment-start-da
 import { CorrectEmploymentTypeDto } from './dto/correct-employment-type.dto';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { CreateRecurringPayrollItemDto } from './dto/create-recurring-payroll-item.dto';
+import { UpdateRecurringPayrollItemPagIbigTreatmentDto } from './dto/update-recurring-payroll-item-pagibig-treatment.dto';
 import { EmployeeAlphaListQueryDto } from './dto/employee-alpha-list-query.dto';
 import { EnsureEmployeeLeaveEntitlementCycleDto } from './dto/ensure-employee-leave-entitlement-cycle.dto';
 import { GetEmployeeLeaveEntitlementQueryDto } from './dto/get-employee-leave-entitlement-query.dto';
@@ -248,6 +249,16 @@ export class EmployeesController {
     );
   }
 
+  @Get(':employeeId/recurring-payroll-items')
+  listRecurringPayrollItems(
+    @Param('employeeId')
+    employeeId: string,
+  ): Promise<RecurringPayrollItemView[]> {
+    return this.recurringPayrollService.listActiveRecurringPayrollItems(
+      employeeId,
+    );
+  }
+
   @Post(':employeeId/recurring-payroll-items')
   createRecurringPayrollItem(
     @Param('employeeId')
@@ -261,6 +272,30 @@ export class EmployeesController {
   ): Promise<RecurringPayrollItemView> {
     return this.recurringPayrollService.createRecurringPayrollItem(
       employeeId,
+      input,
+      identity.user.id,
+    );
+  }
+
+  @Patch(
+    ':employeeId/recurring-payroll-items/:recurringPayrollItemId/pagibig-treatment',
+  )
+  updateRecurringPayrollItemPagIbigTreatment(
+    @Param('employeeId')
+    employeeId: string,
+
+    @Param('recurringPayrollItemId')
+    recurringPayrollItemId: string,
+
+    @Body()
+    input: UpdateRecurringPayrollItemPagIbigTreatmentDto,
+
+    @CurrentAuth()
+    identity: ResolvedAuthenticatedIdentity,
+  ): Promise<RecurringPayrollItemView> {
+    return this.recurringPayrollService.updatePagIbigFundSalaryTreatment(
+      employeeId,
+      recurringPayrollItemId,
       input,
       identity.user.id,
     );

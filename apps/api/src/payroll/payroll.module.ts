@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
 import { DtrsModule } from '../dtrs/dtrs.module';
 
+import { PayrollAdjustmentService } from './payroll-adjustment.service';
 import { PayrollCalculationService } from './payroll-calculation.service';
 import { PayrollController } from './payroll.controller';
 import { PayrollCutoffCalculationService } from './payroll-cutoff-calculation.service';
@@ -22,6 +23,7 @@ import { PayrollStatutoryConfigService } from './payroll-statutory-config.servic
   controllers: [PayrollController],
 
   providers: [
+    PayrollAdjustmentService,
     PayrollInputService,
     PayrollCutoffInputService,
     PayrollMonthlyStatutoryBasisService,
@@ -36,6 +38,7 @@ import { PayrollStatutoryConfigService } from './payroll-statutory-config.servic
   ],
 
   exports: [
+    PayrollAdjustmentService,
     PayrollInputService,
     PayrollCutoffInputService,
     PayrollMonthlyStatutoryBasisService,
