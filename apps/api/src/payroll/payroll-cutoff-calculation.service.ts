@@ -149,27 +149,16 @@ export class PayrollCutoffCalculationService {
     for (const assembly of collected.employees) {
       try {
         const contributionResolution =
-          await this.philippineContributions.resolveSecondCutoff(assembly);
-
-        const unsupportedFirstCutoff =
-          !contributionResolution.ready &&
-          contributionResolution.issues.some(
-            (issue) => issue.code === 'UNSUPPORTED_CUTOFF_POSITION',
-          );
+          await this.philippineContributions.resolve(assembly);
 
         /*
-         * SECOND cutoff:
+         * Both semi-monthly cutoff positions now require the
+         * authoritative Philippine contribution orchestration.
          *
-         * Philippine government contributions must be fully
-         * resolved before statutory payroll continues.
-         *
-         * FIRST cutoff:
-         *
-         * C3 currently falls back to the existing generic path.
-         * FIRST-cutoff PhilHealth/Pag-IBIG orchestration will
-         * replace this fallback in its dedicated implementation.
+         * FIRST  -> PhilHealth + Pag-IBIG, SSS deferred
+         * SECOND -> SSS, PhilHealth + Pag-IBIG deferred
          */
-        if (!contributionResolution.ready && !unsupportedFirstCutoff) {
+        if (!contributionResolution.ready) {
           calculationIssues.push({
             code: 'EMPLOYEE_CALCULATION_INCOMPLETE',
 
@@ -188,40 +177,38 @@ export class PayrollCutoffCalculationService {
         const treatmentOptions =
           treatmentOptionsByEmployeeId[assembly.input.employeeId] ?? {};
 
-        let result: PayrollEmployeeCalculationResult;
+        const withholding = buildPhilippineWithholdingTaxResolver({
+          payBasis: assembly.input.payBasis,
 
-        if (contributionResolution.ready) {
-          const withholding = buildPhilippineWithholdingTaxResolver({
-            payBasis: assembly.input.payBasis,
+          baseRate: assembly.input.baseRate,
 
-            baseRate: assembly.input.baseRate,
+          cutoffStartDate: assembly.cutoff.startDate,
 
-            cutoffStartDate: assembly.cutoff.startDate,
+          cutoffEndDate: assembly.cutoff.endDate,
 
-            cutoffEndDate: assembly.cutoff.endDate,
+          configSnapshot: assembly.input.config.configSnapshot,
 
-            configSnapshot: assembly.input.config.configSnapshot,
+          corePayroll: contributionResolution.corePayroll,
+        });
 
-            corePayroll: contributionResolution.corePayroll,
+        if (!withholding.ready || !withholding.taxResolver) {
+          calculationIssues.push({
+            code: 'EMPLOYEE_CALCULATION_INCOMPLETE',
+
+            employeeId: assembly.input.employeeId,
+
+            employeeNumber: assembly.input.employeeNumber,
+
+            message:
+              withholding.issues[0]?.message ??
+              'Philippine withholding tax resolution is incomplete.',
           });
 
-          if (!withholding.ready || !withholding.taxResolver) {
-            calculationIssues.push({
-              code: 'EMPLOYEE_CALCULATION_INCOMPLETE',
+          continue;
+        }
 
-              employeeId: assembly.input.employeeId,
-
-              employeeNumber: assembly.input.employeeNumber,
-
-              message:
-                withholding.issues[0]?.message ??
-                'Philippine withholding tax resolution is incomplete.',
-            });
-
-            continue;
-          }
-
-          result = this.calculation.calculateEmployeeWithContributionOverride(
+        const result =
+          this.calculation.calculateEmployeeWithContributionOverride(
             assembly,
 
             contributionResolution.contributions,
@@ -230,18 +217,6 @@ export class PayrollCutoffCalculationService {
 
             withholding.taxResolver,
           );
-        } else {
-          /*
-           * FIRST-cutoff Philippine contribution orchestration
-           * is not wired yet, so preserve the existing generic
-           * statutory path.
-           */
-          result = this.calculation.calculateEmployee(
-            assembly,
-
-            treatmentOptions,
-          );
-        }
 
         employees.push(result);
 

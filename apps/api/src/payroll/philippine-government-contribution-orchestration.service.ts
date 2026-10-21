@@ -24,12 +24,14 @@ import { buildPhilippineGovernmentContributionResolutions } from './philippine-g
 
 import {
   resolvePagIbigFundSalaryComponents,
+  resolvePhilHealthMonthlyBasicSalary,
   resolveSssMonthlyCompensationCompleteness,
 } from './philippine-statutory-basis-policy';
 
 export type PhilippineContributionOrchestrationIssueCode =
   | 'CORE_PAYROLL_INCOMPLETE'
-  | 'UNSUPPORTED_CUTOFF_POSITION'
+  | 'PHILHEALTH_MONTHLY_BASIC_SALARY_INCOMPLETE'
+  | 'PAGIBIG_MONTHLY_BASIS_INCOMPLETE'
   | 'SSS_MONTHLY_BASIS_INCOMPLETE';
 
 export interface PhilippineContributionOrchestrationIssue {
@@ -62,7 +64,7 @@ export class PhilippineGovernmentContributionOrchestrationService {
     private readonly monthlyBasis: PayrollMonthlyStatutoryBasisService,
   ) {}
 
-  async resolveSecondCutoff(
+  async resolve(
     assembly: PayrollEmployeeInputAssembly,
 
     opening?: PayrollMonthlyStatutoryOpeningValues,
@@ -101,38 +103,6 @@ export class PhilippineGovernmentContributionOrchestrationService {
       };
     }
 
-    /*
-     * C3B2 deliberately implements only the SECOND-cutoff
-     * path because:
-     *
-     * - SSS is collected on SECOND;
-     * - PhilHealth and Pag-IBIG are DEFERRED here;
-     * - their FIRST-cutoff basis orchestration is a separate
-     *   implementation step.
-     */
-    if (period.position !== 'SECOND') {
-      return {
-        ready: false,
-
-        cutoffPosition: period.position,
-
-        corePayroll,
-
-        monthlyBasis: null,
-
-        contributions: [],
-
-        issues: [
-          {
-            code: 'UNSUPPORTED_CUTOFF_POSITION',
-
-            message:
-              'This orchestration path currently resolves only the SECOND semi-monthly cutoff.',
-          },
-        ],
-      };
-    }
-
     const currentPagIbig = resolvePagIbigFundSalaryComponents(
       corePayroll.lineItems,
     );
@@ -166,6 +136,104 @@ export class PhilippineGovernmentContributionOrchestrationService {
           }
         : {}),
     });
+
+    if (period.position === 'FIRST') {
+      let philHealthMonthlyBasicSalary: string;
+
+      try {
+        philHealthMonthlyBasicSalary = resolvePhilHealthMonthlyBasicSalary({
+          payBasis: assembly.input.payBasis,
+
+          baseRate: assembly.input.baseRate,
+
+          ...(assembly.input.payBasis === 'DAILY'
+            ? {
+                dailyWorkerScheduleDaysPerWeek:
+                  this.readPhilHealthDailyWorkerScheduleDaysPerWeek(
+                    assembly.input.config.configSnapshot,
+                  ),
+              }
+            : {}),
+        });
+      } catch (error: unknown) {
+        return {
+          ready: false,
+
+          cutoffPosition: period.position,
+
+          corePayroll,
+
+          monthlyBasis: statutoryMonth,
+
+          contributions: [],
+
+          issues: [
+            {
+              code: 'PHILHEALTH_MONTHLY_BASIC_SALARY_INCOMPLETE',
+
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'PhilHealth monthly basic salary basis is incomplete.',
+            },
+          ],
+        };
+      }
+
+      const pagIbigMonthlyCompensation =
+        statutoryMonth.monthly.pagIbigMonthlyCompensation;
+
+      if (pagIbigMonthlyCompensation === null) {
+        return {
+          ready: false,
+
+          cutoffPosition: period.position,
+
+          corePayroll,
+
+          monthlyBasis: statutoryMonth,
+
+          contributions: [],
+
+          issues: [
+            {
+              code: 'PAGIBIG_MONTHLY_BASIS_INCOMPLETE',
+
+              message:
+                statutoryMonth.monthly.pagIbigIssues.length > 0
+                  ? statutoryMonth.monthly.pagIbigIssues.join(' ')
+                  : 'Pag-IBIG monthly compensation basis is incomplete.',
+            },
+          ],
+        };
+      }
+
+      const contributions = buildPhilippineGovernmentContributionResolutions({
+        cutoffPosition: period.position,
+
+        basis: {
+          philHealthMonthlyBasicSalary,
+
+          pagIbigMonthlyCompensation,
+        },
+
+        configSnapshot: assembly.input.config.configSnapshot,
+      });
+
+      return {
+        ready: true,
+
+        cutoffPosition: period.position,
+
+        corePayroll,
+
+        monthlyBasis: statutoryMonth,
+
+        contributions,
+
+        issues: [],
+      };
+    }
 
     const sss = resolveSssMonthlyCompensationCompleteness({
       cutoffPosition: period.position,
@@ -227,5 +295,37 @@ export class PhilippineGovernmentContributionOrchestrationService {
 
       issues: [],
     };
+  }
+
+  private readPhilHealthDailyWorkerScheduleDaysPerWeek(
+    configSnapshot: Readonly<Record<string, unknown>>,
+  ): 5 | 6 | undefined {
+    const statutory = configSnapshot['statutory'];
+
+    if (
+      statutory === null ||
+      Array.isArray(statutory) ||
+      typeof statutory !== 'object'
+    ) {
+      return undefined;
+    }
+
+    const philHealth = (statutory as Readonly<Record<string, unknown>>)[
+      'philHealth'
+    ];
+
+    if (
+      philHealth === null ||
+      Array.isArray(philHealth) ||
+      typeof philHealth !== 'object'
+    ) {
+      return undefined;
+    }
+
+    const value = (philHealth as Readonly<Record<string, unknown>>)[
+      'dailyWorkerScheduleDaysPerWeek'
+    ];
+
+    return value === 5 || value === 6 ? value : undefined;
   }
 }

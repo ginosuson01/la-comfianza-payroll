@@ -53,6 +53,18 @@ function createGoldenConfigSnapshotWithMinimumWage(): Record<string, unknown> {
   return snapshot;
 }
 
+function createResolvedCompanyConfigSnapshot(): Record<string, unknown> {
+  const snapshot = createGoldenConfigSnapshotWithMinimumWage();
+
+  const statutory = snapshot.statutory as Record<string, unknown>;
+
+  const philHealth = statutory.philHealth as Record<string, unknown>;
+
+  philHealth.dailyWorkerScheduleDaysPerWeek = 5;
+
+  return snapshot;
+}
+
 function createAssembly(
   employeeId: string,
   employeeNumber: string,
@@ -118,7 +130,7 @@ function createAssembly(
 
         standardWorkMinutesPerDay: 480,
 
-        configSnapshot: createGoldenConfigSnapshot(),
+        configSnapshot: createResolvedCompanyConfigSnapshot(),
       },
     },
   };
@@ -274,31 +286,30 @@ function createFixture(collection: PayrollCutoffInputCollection) {
   };
 
   /*
-   * Existing cutoff-calculation tests use FIRST-cutoff fixtures.
+   * The cutoff calculator now requires authoritative Philippine
+   * statutory orchestration on both FIRST and SECOND cutoffs.
    *
-   * Until FIRST-cutoff PH contribution orchestration is wired,
-   * UNSUPPORTED_CUTOFF_POSITION intentionally exercises the
-   * existing generic calculation path.
+   * Most tests below are concerned with cutoff aggregation and
+   * treatment behavior, so the shared fixture supplies a minimal
+   * successful FIRST-cutoff orchestration result.
    */
   const philippineContributions = {
-    resolveSecondCutoff: jest.fn().mockResolvedValue({
-      ready: false,
+    resolve: jest.fn().mockResolvedValue({
+      ready: true,
 
       cutoffPosition: 'FIRST',
 
-      corePayroll: null,
+      corePayroll: {
+        status: 'COMPLETE',
+
+        lineItems: [],
+      },
 
       monthlyBasis: null,
 
       contributions: [],
 
-      issues: [
-        {
-          code: 'UNSUPPORTED_CUTOFF_POSITION',
-
-          message: 'Synthetic FIRST-cutoff fallback.',
-        },
-      ],
+      issues: [],
     }),
   };
 
@@ -328,7 +339,7 @@ describe('PayrollCutoffCalculationService', () => {
       createCollection([employee1, employee2]),
     );
 
-    calculation.calculateEmployee
+    calculation.calculateEmployeeWithContributionOverride
       .mockReturnValueOnce(
         createReadyCalculation(employee1, {
           grossPay: '600.00',
@@ -432,7 +443,7 @@ describe('PayrollCutoffCalculationService', () => {
       createCollection([employee]),
     );
 
-    calculation.calculateEmployee.mockReturnValue({
+    calculation.calculateEmployeeWithContributionOverride.mockReturnValue({
       ...createReadyCalculation(employee, {
         grossPay: '600.00',
 
@@ -491,7 +502,7 @@ describe('PayrollCutoffCalculationService', () => {
       createCollection([employee]),
     );
 
-    calculation.calculateEmployee.mockReturnValue(
+    calculation.calculateEmployeeWithContributionOverride.mockReturnValue(
       createReadyCalculation(employee, {
         grossPay: '600.00',
 
@@ -527,10 +538,11 @@ describe('PayrollCutoffCalculationService', () => {
       optionsByEmployee,
     );
 
-    expect(calculation.calculateEmployee).toHaveBeenCalledWith(
-      employee,
-      options,
-    );
+    expect(
+      calculation.calculateEmployeeWithContributionOverride,
+    ).toHaveBeenCalledWith(employee, [], options, expect.any(Function));
+
+    expect(calculation.calculateEmployee).not.toHaveBeenCalled();
   });
   it('uses Philippine contribution and withholding overrides when SECOND-cutoff statutory inputs are resolved', async () => {
     const employee = createAssembly('employee-1', 'EMP-001');
@@ -549,7 +561,8 @@ describe('PayrollCutoffCalculationService', () => {
 
     employee.input.baseRate = '650.0000';
 
-    employee.input.config.configSnapshot = createGoldenConfigSnapshotWithMinimumWage();
+    employee.input.config.configSnapshot =
+      createGoldenConfigSnapshotWithMinimumWage();
 
     const { calculation, philippineContributions, service } = createFixture(
       createCollection([employee]),
@@ -621,7 +634,7 @@ describe('PayrollCutoffCalculationService', () => {
       ],
     };
 
-    philippineContributions.resolveSecondCutoff.mockResolvedValue({
+    philippineContributions.resolve.mockResolvedValue({
       ready: true,
 
       cutoffPosition: 'SECOND',
@@ -690,7 +703,7 @@ describe('PayrollCutoffCalculationService', () => {
       createCollection([employee]),
     );
 
-    philippineContributions.resolveSecondCutoff.mockResolvedValue({
+    philippineContributions.resolve.mockResolvedValue({
       ready: true,
 
       cutoffPosition: 'SECOND',
@@ -761,7 +774,7 @@ describe('PayrollCutoffCalculationService', () => {
       createCollection([employee]),
     );
 
-    philippineContributions.resolveSecondCutoff.mockResolvedValue({
+    philippineContributions.resolve.mockResolvedValue({
       ready: false,
 
       cutoffPosition: 'SECOND',

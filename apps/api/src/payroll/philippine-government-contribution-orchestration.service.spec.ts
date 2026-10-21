@@ -340,9 +340,7 @@ describe('PhilippineGovernmentContributionOrchestrationService', () => {
 
     resolveMonthlyBasis.mockResolvedValue(createMonthlyBasis('2400.00', 0));
 
-    const result = await service.resolveSecondCutoff(
-      createAssembly('2026-09-18'),
-    );
+    const result = await service.resolve(createAssembly('2026-09-18'));
 
     expect(result.ready).toBe(true);
 
@@ -417,9 +415,7 @@ describe('PhilippineGovernmentContributionOrchestrationService', () => {
 
     resolveMonthlyBasis.mockResolvedValue(createMonthlyBasis('2900.00', 0));
 
-    const result = await service.resolveSecondCutoff(
-      createAssembly('2026-09-18'),
-    );
+    const result = await service.resolve(createAssembly('2026-09-18'));
 
     expect(result.ready).toBe(true);
 
@@ -457,9 +453,7 @@ describe('PhilippineGovernmentContributionOrchestrationService', () => {
 
     resolveMonthlyBasis.mockResolvedValue(createMonthlyBasis('3600.00', 0));
 
-    const result = await service.resolveSecondCutoff(
-      createAssembly('2026-08-01'),
-    );
+    const result = await service.resolve(createAssembly('2026-08-01'));
 
     expect(result.ready).toBe(false);
 
@@ -484,9 +478,7 @@ describe('PhilippineGovernmentContributionOrchestrationService', () => {
 
     resolveMonthlyBasis.mockResolvedValue(basis);
 
-    const result = await service.resolveSecondCutoff(
-      createAssembly('2026-08-01'),
-    );
+    const result = await service.resolve(createAssembly('2026-08-01'));
 
     expect(result.ready).toBe(true);
 
@@ -499,7 +491,101 @@ describe('PhilippineGovernmentContributionOrchestrationService', () => {
     );
   });
 
-  it('does not run SECOND orchestration on the FIRST cutoff', async () => {
+  it('resolves PhilHealth and Pag-IBIG on FIRST and defers SSS', async () => {
+    resolveCutoffPeriod.mockResolvedValue({
+      payrollCutoffId: 'cutoff-1',
+
+      cutoffTemplateId: 'template-1',
+
+      position: 'FIRST',
+
+      cutoff: {
+        startDate: '2026-09-01',
+
+        endDate: '2026-09-15',
+
+        payDate: '2026-09-25',
+      },
+    });
+
+    const corePayroll = createCorePayroll('3600.00', '3600.00');
+
+    corePayroll.lineItems = [
+      {
+        category: 'EARNING',
+        code: 'BASIC_PAY',
+        description: 'Basic Pay',
+        quantity: null,
+        rate: null,
+        amount: '3600.00',
+        taxable: true,
+        metadata: {
+          source: 'ATTENDANCE_REGULAR_MINUTES',
+        },
+      },
+    ];
+
+    calculateEmployeeCore.mockReturnValue(corePayroll);
+
+    const basis = createMonthlyBasis('3600.00', 0);
+
+    basis.current.pagIbigMonthlyCompensation = '3600.00';
+    basis.monthly.pagIbigMonthlyCompensation = '3600.00';
+    basis.monthly.pagIbigIssues = [];
+
+    resolveMonthlyBasis.mockResolvedValue(basis);
+
+    const assembly = createAssembly('2026-08-01');
+
+    const statutory = assembly.input.config.configSnapshot[
+      'statutory'
+    ] as Record<string, unknown>;
+
+    const philHealth = statutory['philHealth'] as Record<string, unknown>;
+
+    philHealth['dailyWorkerScheduleDaysPerWeek'] = 5;
+
+    const result = await service.resolve(assembly);
+
+    expect(result.ready).toBe(true);
+
+    expect(result.issues).toEqual([]);
+
+    expect(resolveMonthlyBasis).toHaveBeenCalledWith(
+      expect.objectContaining({
+        current: {
+          basicPay: '3600.00',
+          grossPay: '3600.00',
+          pagIbigMonthlyCompensation: '3600.00',
+        },
+      }),
+    );
+
+    expect(result.contributions[0]).toEqual(
+      expect.objectContaining({
+        treatment: 'DEFERRED',
+        code: 'SSS',
+      }),
+    );
+
+    expect(result.contributions[1]).toEqual(
+      expect.objectContaining({
+        treatment: 'APPLY',
+        code: 'PHILHEALTH',
+        basisAmount: '13050.00',
+      }),
+    );
+
+    expect(result.contributions[2]).toEqual(
+      expect.objectContaining({
+        treatment: 'APPLY',
+        code: 'PAGIBIG',
+        basisAmount: '3600.00',
+      }),
+    );
+  });
+
+  it('blocks FIRST for a DAILY employee when the frozen PhilHealth work-week schedule is missing', async () => {
     resolveCutoffPeriod.mockResolvedValue({
       payrollCutoffId: 'cutoff-1',
 
@@ -520,14 +606,77 @@ describe('PhilippineGovernmentContributionOrchestrationService', () => {
       createCorePayroll('3600.00', '3600.00'),
     );
 
-    const result = await service.resolveSecondCutoff(
-      createAssembly('2026-08-01'),
-    );
+    resolveMonthlyBasis.mockResolvedValue(createMonthlyBasis('3600.00', 0));
+
+    const result = await service.resolve(createAssembly('2026-08-01'));
 
     expect(result.ready).toBe(false);
 
-    expect(result.issues[0]?.code).toBe('UNSUPPORTED_CUTOFF_POSITION');
+    expect(result.contributions).toEqual([]);
 
-    expect(resolveMonthlyBasis).not.toHaveBeenCalled();
+    expect(result.issues).toEqual([
+      {
+        code: 'PHILHEALTH_MONTHLY_BASIC_SALARY_INCOMPLETE',
+
+        message:
+          'PhilHealth daily-worker schedule must be configured as 5 or 6 days per week.',
+      },
+    ]);
+  });
+
+  it('blocks FIRST when Pag-IBIG monthly compensation is unresolved', async () => {
+    resolveCutoffPeriod.mockResolvedValue({
+      payrollCutoffId: 'cutoff-1',
+
+      cutoffTemplateId: 'template-1',
+
+      position: 'FIRST',
+
+      cutoff: {
+        startDate: '2026-09-01',
+
+        endDate: '2026-09-15',
+
+        payDate: '2026-09-25',
+      },
+    });
+
+    calculateEmployeeCore.mockReturnValue(
+      createCorePayroll('3600.00', '3600.00'),
+    );
+
+    const basis = createMonthlyBasis('3600.00', 0);
+
+    basis.monthly.pagIbigMonthlyCompensation = null;
+    basis.monthly.pagIbigIssues = [
+      'Pag-IBIG Fund Salary treatment is unresolved for recurring earning LEGACY_ALLOWANCE.',
+    ];
+
+    resolveMonthlyBasis.mockResolvedValue(basis);
+
+    const assembly = createAssembly('2026-08-01');
+
+    const statutory = assembly.input.config.configSnapshot[
+      'statutory'
+    ] as Record<string, unknown>;
+
+    const philHealth = statutory['philHealth'] as Record<string, unknown>;
+
+    philHealth['dailyWorkerScheduleDaysPerWeek'] = 5;
+
+    const result = await service.resolve(assembly);
+
+    expect(result.ready).toBe(false);
+
+    expect(result.contributions).toEqual([]);
+
+    expect(result.issues).toEqual([
+      {
+        code: 'PAGIBIG_MONTHLY_BASIS_INCOMPLETE',
+
+        message:
+          'Pag-IBIG Fund Salary treatment is unresolved for recurring earning LEGACY_ALLOWANCE.',
+      },
+    ]);
   });
 });
